@@ -4,7 +4,6 @@ import com.colonybridge.model.BridgeInfo;
 import com.colonybridge.model.ColonySnapshot;
 import com.colonybridge.utility.FilenameSanitizer;
 import com.colonybridge.utility.JsonSupport;
-import com.colonybridge.utility.SnapshotFingerprinter;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -18,15 +17,24 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
 public class SnapshotStore {
     private final Path root;
     private final boolean prettyPrint;
+    private final SnapshotSerializer serializer;
+    private final ConcurrentMap<Path, String> latestFingerprints = new ConcurrentHashMap<>();
 
     public SnapshotStore(Path root, boolean prettyPrint) {
+        this(root, prettyPrint, new SnapshotSerializer());
+    }
+
+    SnapshotStore(Path root, boolean prettyPrint, SnapshotSerializer serializer) {
         this.root = root.toAbsolutePath().normalize();
         this.prettyPrint = prettyPrint;
+        this.serializer = serializer;
     }
 
     public Path root() {
@@ -34,23 +42,32 @@ public class SnapshotStore {
     }
 
     public SnapshotWriteResult writeSnapshot(ColonySnapshot input, int retainSnapshots) throws IOException {
-        String fingerprint = SnapshotFingerprinter.fingerprint(input);
-        ColonySnapshot snapshot = input.withFingerprint(fingerprint);
+        return writeSnapshot(serializer.prepare(input, prettyPrint), retainSnapshots);
+    }
+
+    public SnapshotWriteResult writeSnapshot(PreparedSnapshot prepared, int retainSnapshots) throws IOException {
+        ColonySnapshot snapshot = prepared.snapshot();
+        String fingerprint = prepared.fingerprint();
         String fileStem = fileStem(snapshot);
         Path latestPath = root.resolve("latest").resolve(fileStem + ".json");
         Path historyDir = root.resolve("snapshots").resolve(fileStem);
         Path historyPath = historyDir.resolve(timestampFileName(snapshot.generatedAt()));
 
         boolean duplicate = latestFingerprint(latestPath).map(fingerprint::equals).orElse(false);
-        String json = JsonSupport.toJson(snapshot, prettyPrint);
+        long diskWriteStarted = System.nanoTime();
         boolean wroteHistory = false;
         if (!duplicate) {
-            AtomicFileWriter.writeUtf8(historyPath, json);
+            AtomicFileWriter.writeUtf8(historyPath, prepared.outputJson());
             wroteHistory = true;
         }
-        AtomicFileWriter.writeUtf8(latestPath, json);
+        AtomicFileWriter.writeUtf8(latestPath, prepared.outputJson());
+        latestFingerprints.put(latestPath.toAbsolutePath().normalize(), fingerprint);
+        long diskWriteNanos = System.nanoTime() - diskWriteStarted;
+        long retentionStarted = System.nanoTime();
         retain(historyDir, retainSnapshots);
-        return new SnapshotWriteResult(latestPath, wroteHistory ? historyPath : null, wroteHistory, duplicate);
+        long retentionNanos = System.nanoTime() - retentionStarted;
+        return new SnapshotWriteResult(latestPath, wroteHistory ? historyPath : null, wroteHistory, duplicate,
+                fingerprint, prepared.serializationNanos(), prepared.fingerprintNanos(), diskWriteNanos, retentionNanos);
     }
 
     public void writeBridgeInfo(BridgeInfo info) throws IOException {
@@ -59,14 +76,20 @@ public class SnapshotStore {
 
     private Optional<String> latestFingerprint(Path latestPath) throws IOException {
         if (!Files.isRegularFile(latestPath)) {
+            latestFingerprints.remove(latestPath.toAbsolutePath().normalize());
             return Optional.empty();
         }
+        Path normalized = latestPath.toAbsolutePath().normalize();
+        String cached = latestFingerprints.get(normalized);
+        if (cached != null) return Optional.of(cached);
         try {
             String json = Files.readString(latestPath, StandardCharsets.UTF_8);
             JsonObject rootObject = JsonParser.parseString(json).getAsJsonObject();
-            return rootObject.has("fingerprint") && !rootObject.get("fingerprint").isJsonNull()
+            Optional<String> result = rootObject.has("fingerprint") && !rootObject.get("fingerprint").isJsonNull()
                     ? Optional.of(rootObject.get("fingerprint").getAsString())
                     : Optional.empty();
+            result.ifPresent(value -> latestFingerprints.put(normalized, value));
+            return result;
         } catch (RuntimeException malformedLatest) {
             return Optional.empty();
         }

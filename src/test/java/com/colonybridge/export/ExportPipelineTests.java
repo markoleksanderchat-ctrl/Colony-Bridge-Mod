@@ -16,6 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ExportPipelineTests {
     private ExportPipelineTests() {
@@ -29,6 +33,95 @@ public final class ExportPipelineTests {
         snapshotMapsSerializeDeterministically();
         remoteRetryDelayIsBounded();
         bridgeInfoAdvertisesDesktopContract();
+        preparedMaterialPreservesBytesAndFingerprint();
+        fingerprintCacheFallsBackToDiskAfterRestart();
+        remoteQueueIsOneFlightAndBounded();
+        remoteQueueShutdownIsBounded();
+    }
+
+    private static void preparedMaterialPreservesBytesAndFingerprint() {
+        ColonySnapshot input = SnapshotFixtures.smallColony("2026-07-10T01:00:00Z", "manual");
+        String fingerprint = com.colonybridge.utility.SnapshotFingerprinter.fingerprint(input);
+        ColonySnapshot expected = input.withFingerprint(fingerprint);
+        PreparedSnapshot compact = new SnapshotSerializer().prepare(input, false);
+        PreparedSnapshot pretty = new SnapshotSerializer().prepare(input, true);
+        require(fingerprint.equals(compact.fingerprint()), "prepared fingerprint must remain contract-equivalent");
+        require(JsonSupport.toJson(expected, false).equals(compact.compactJson()),
+                "canonical compact snapshot bytes must remain unchanged");
+        require(JsonSupport.toJson(expected, true).equals(pretty.outputJson()),
+                "pretty snapshot bytes must remain unchanged when configured");
+        require(SnapshotSanitizer.sanitize(input, "token").equals(
+                        SnapshotSanitizer.sanitizeCompact(compact.remoteCompactJson(), "token")),
+                "reused compact material must preserve remote sanitized bytes");
+        require(compact.serializationNanos() >= 0 && compact.fingerprintNanos() >= 0,
+                "serialization and fingerprint stages must be measured separately");
+    }
+
+    private static void fingerprintCacheFallsBackToDiskAfterRestart() throws Exception {
+        Path root = Files.createTempDirectory("colonybridge-fingerprint-restart-test");
+        ColonySnapshot first = SnapshotFixtures.smallColony("2026-07-10T01:00:00Z", "manual");
+        SnapshotWriteResult written = new SnapshotStore(root, false).writeSnapshot(first, 10);
+        SnapshotWriteResult afterRestart = new SnapshotStore(root, false).writeSnapshot(
+                SnapshotFixtures.smallColony("2026-07-10T02:00:00Z", "interval"), 10);
+        require(afterRestart.duplicate(), "a fresh store must recover the latest fingerprint from disk");
+        require(!afterRestart.wroteHistoricalSnapshot(), "restart correctness must preserve history deduplication");
+        require(Files.isRegularFile(written.latestPath()), "restart fallback must preserve the durable latest file");
+    }
+
+    private static void remoteQueueIsOneFlightAndBounded() throws Exception {
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicInteger concurrent = new AtomicInteger();
+        AtomicInteger maximumConcurrent = new AtomicInteger();
+        RemotePublishQueue queue = new RemotePublishQueue((payload, endpoint, token) -> {
+            int call = calls.incrementAndGet();
+            int active = concurrent.incrementAndGet();
+            maximumConcurrent.accumulateAndGet(active, Math::max);
+            try {
+                if (call == 1) {
+                    firstStarted.countDown();
+                    releaseFirst.await(2, TimeUnit.SECONDS);
+                }
+                return new RemotePublishResult(200, 1, payload.length);
+            } finally {
+                concurrent.decrementAndGet();
+            }
+        });
+        PreparedSnapshot snapshot = new SnapshotSerializer().prepare(
+                SnapshotFixtures.smallColony("2026-07-10T01:00:00Z", "manual"), false);
+        var first = queue.submit(List.of(snapshot), "https://example.com/upload", "token");
+        require(firstStarted.await(1, TimeUnit.SECONDS), "first remote publish must start");
+        var replaced = queue.submit(List.of(snapshot), "https://example.com/upload", "token");
+        var latest = queue.submit(List.of(snapshot), "https://example.com/upload", "token");
+        require(replaced.get(1, TimeUnit.SECONDS).outcome() == ExportResult.RemoteOutcome.COALESCED,
+                "the bounded queue must coalesce an older pending remote batch");
+        releaseFirst.countDown();
+        require(first.get(2, TimeUnit.SECONDS).outcome() == ExportResult.RemoteOutcome.SUCCEEDED,
+                "active remote publish must complete");
+        require(latest.get(2, TimeUnit.SECONDS).outcome() == ExportResult.RemoteOutcome.SUCCEEDED,
+                "the newest pending remote batch must run");
+        require(maximumConcurrent.get() == 1, "remote publication must remain one-flight");
+        queue.shutdown(Duration.ofSeconds(1));
+    }
+
+    private static void remoteQueueShutdownIsBounded() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        RemotePublishQueue queue = new RemotePublishQueue((payload, endpoint, token) -> {
+            started.countDown();
+            Thread.sleep(5_000);
+            return new RemotePublishResult(200, 1, payload.length);
+        });
+        PreparedSnapshot snapshot = new SnapshotSerializer().prepare(
+                SnapshotFixtures.smallColony("2026-07-10T01:00:00Z", "manual"), false);
+        var remote = queue.submit(List.of(snapshot), "https://example.com/upload", "token");
+        require(started.await(1, TimeUnit.SECONDS), "remote shutdown fixture must start");
+        long shutdownStarted = System.nanoTime();
+        queue.shutdown(Duration.ofMillis(100));
+        long shutdownMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - shutdownStarted);
+        require(shutdownMs < 1_000, "remote shutdown must remain bounded");
+        require(remote.get(1, TimeUnit.SECONDS).outcome() == ExportResult.RemoteOutcome.CANCELLED,
+                "interrupted remote work must report cancellation without affecting local durability");
     }
 
     private static void bridgeInfoAdvertisesDesktopContract() {

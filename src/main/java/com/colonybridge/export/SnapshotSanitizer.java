@@ -27,8 +27,12 @@ public final class SnapshotSanitizer {
     }
 
     public static JsonObject sanitize(ColonySnapshot snapshot, String aliasSecret) {
+        return sanitizeCompact(JsonSupport.toJson(snapshot, false), aliasSecret);
+    }
+
+    public static JsonObject sanitizeCompact(String compactJson, String aliasSecret) {
         if (aliasSecret == null || aliasSecret.isBlank()) throw new IllegalArgumentException("Alias secret is missing.");
-        JsonObject root = JsonParser.parseString(JsonSupport.toJson(snapshot, false)).getAsJsonObject();
+        JsonObject root = JsonParser.parseString(compactJson).getAsJsonObject();
         remove(root, "world", "worldId");
         remove(root, "colony", "ownerUuid");
         remove(root, "colony", "center");

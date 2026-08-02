@@ -10,6 +10,11 @@ public final class SnapshotFingerprinter {
 
     public static String fingerprint(ColonySnapshot snapshot) {
         JsonObject root = JsonParser.parseString(JsonSupport.toJson(snapshot.withFingerprint(null), false)).getAsJsonObject();
+        return fingerprint(root);
+    }
+
+    public static String fingerprint(JsonObject serializedSnapshot) {
+        JsonObject root = serializedSnapshot.deepCopy();
         root.remove("generatedAt");
         root.remove("trigger");
         root.remove("fingerprint");

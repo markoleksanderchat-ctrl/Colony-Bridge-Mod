@@ -121,6 +121,17 @@ tasks.register('exportContractFixtures', JavaExec) {
     ).get()
 }
 
+tasks.register('measurePhase4', JavaExec) {
+    group = 'verification'
+    description = 'Measures Phase 4 serialization, fingerprint, storage, retention, and sanitization stages.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.colonybridge.export.Phase4PerformanceProbe'
+    args providers.gradleProperty('phase4MeasurementOutput').orElse(
+            layout.buildDirectory.file('reports/phase4-performance.json').map { it.asFile.absolutePath }
+    ).get()
+}
+
 tasks.register('verifyVersionMetadata') {
     group = 'verification'
     description = 'Verifies Gradle, generated Java metadata, and the expanded mod manifest agree.'

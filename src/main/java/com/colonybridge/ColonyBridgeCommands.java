@@ -145,6 +145,10 @@ public final class ColonyBridgeCommands {
         source.sendSuccess(() -> Component.literal("Colony Bridge status"), false);
         source.sendSuccess(() -> Component.literal("Exports: " + exportSchedule(config)), false);
         source.sendSuccess(() -> Component.literal("Export running: " + exporter.exportInProgress()), false);
+        source.sendSuccess(() -> Component.literal("Manual exports queued: " + exporter.queuedManualExports()), false);
+        source.sendSuccess(() -> Component.literal("Automatic exports coalesced: " + exporter.coalescedAutomaticExports()), false);
+        source.sendSuccess(() -> Component.literal("Remote active/queued: " + exporter.remotePublishInProgress()
+                + "/" + exporter.remotePublishQueued()), false);
         source.sendSuccess(() -> Component.literal("Remote sync: " + remoteSyncStatus(config)), false);
         source.sendSuccess(() -> Component.literal("MineColonies detected: " + status.mineColoniesDetected()), false);
         source.sendSuccess(() -> Component.literal("MineColonies version: " + nullable(status.mineColoniesVersion())), false);
@@ -152,6 +156,15 @@ public final class ColonyBridgeCommands {
         source.sendSuccess(() -> Component.literal("Last export: " + instant(status.lastExportAt())), false);
         source.sendSuccess(() -> Component.literal("Last successful export: " + instant(status.lastSuccessfulExportAt())), false);
         source.sendSuccess(() -> Component.literal("Last duration ms: " + status.lastExportDurationMs()), false);
+        source.sendSuccess(() -> Component.literal("Last local/remote outcome: " + status.lastLocalOutcome()
+                + "/" + status.lastRemoteOutcome()), false);
+        source.sendSuccess(() -> Component.literal("Last stage ms: collect=" + status.lastTimings().collectionMs()
+                + " serialize=" + status.lastTimings().serializationMs()
+                + " fingerprint=" + status.lastTimings().fingerprintMs()
+                + " disk=" + status.lastTimings().diskWriteMs()
+                + " retention=" + status.lastTimings().retentionMs()
+                + " sanitize=" + status.lastTimings().sanitizationMs()
+                + " remote=" + status.lastTimings().remotePublishMs()), false);
         source.sendSuccess(() -> Component.literal("Export directory: " + nullablePath(status.outputRoot())), false);
         source.sendSuccess(() -> Component.literal("Adapter: " + status.adapterName()), false);
         source.sendSuccess(() -> Component.literal("Last warnings/errors: " + status.lastWarningCount() + "/" + status.lastErrorCount()), false);

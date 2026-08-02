@@ -21,10 +21,14 @@ final class RemoteSnapshotPublisher {
     private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
     RemotePublishResult publish(ColonySnapshot snapshot, String endpoint, String token) throws IOException, InterruptedException {
+        if (token == null || token.isBlank()) throw new IllegalArgumentException("Remote sync token is missing.");
+        byte[] payload = SnapshotSanitizer.sanitize(snapshot, token).toString().getBytes(StandardCharsets.UTF_8);
+        return publishPayload(payload, endpoint, token);
+    }
+
+    RemotePublishResult publishPayload(byte[] payload, String endpoint, String token) throws IOException, InterruptedException {
         URI uri = RemoteEndpointValidator.requireSafeHttps(endpoint);
         if (token == null || token.isBlank()) throw new IllegalArgumentException("Remote sync token is missing.");
-
-        byte[] payload = SnapshotSanitizer.sanitize(snapshot, token).toString().getBytes(StandardCharsets.UTF_8);
         if (payload.length > MAX_PAYLOAD_BYTES) {
             throw new IOException("Sanitized snapshot exceeds " + MAX_PAYLOAD_BYTES + " bytes.");
         }

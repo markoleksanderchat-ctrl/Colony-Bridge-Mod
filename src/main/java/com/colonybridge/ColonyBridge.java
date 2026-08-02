@@ -55,6 +55,7 @@ public final class ColonyBridge {
     private static final int CONFIG_REFRESH_TICKS = TICKS_PER_SECOND;
     private static final int DAY_CHECK_TICKS = TICKS_PER_SECOND;
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 20;
+    private static final Duration BACKGROUND_SHUTDOWN_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration JOIN_EXPORT_DEDUP_WINDOW = Duration.ofSeconds(10);
     private static final Duration SHUTDOWN_EXPORT_DEDUP_WINDOW = Duration.ofSeconds(10);
 
@@ -84,6 +85,7 @@ public final class ColonyBridge {
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
+        exporter.start();
         MarketManager.get(event.getServer());
         BridgeConfigValues config = refreshConfig();
         ticksUntilPeriodicExport = ticksForSeconds(config.periodicExportSeconds());
@@ -115,6 +117,7 @@ public final class ColonyBridge {
         } else if (config.enabled() && config.exportOnShutdown()) {
             LOGGER.debug("Colony Bridge skipped a redundant shutdown export after a recent successful disconnect export.");
         }
+        exporter.shutdown(BACKGROUND_SHUTDOWN_TIMEOUT);
         MarketManager.close(event.getServer());
     }
 
