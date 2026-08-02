@@ -38,7 +38,11 @@ neoForge {
     }
 }
 
-def instanceMods = file('C:/Users/marko/curseforge/minecraft/Instances/Create Adventures/mods')
+def instanceModsPath = providers.gradleProperty('colonybridge.devModsDir')
+        .orElse(providers.environmentVariable('COLONYBRIDGE_DEV_MODS_DIR'))
+        .orElse('C:/Users/marko/curseforge/minecraft/Instances/Create Adventures/mods')
+        .get()
+def instanceMods = file(instanceModsPath)
 def localModJar = { pattern ->
     def matches = instanceMods.exists() ? instanceMods.listFiles().findAll { it.name ==~ pattern } : []
     if (matches.isEmpty()) {
