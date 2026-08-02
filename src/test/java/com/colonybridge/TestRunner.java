@@ -35,6 +35,7 @@ public final class TestRunner {
         estimatesFoodRunway();
         matchesBuilderHutProgress();
         refreshesStockEveryTwoColonyDays();
+        com.colonybridge.minecolonies.collection.CollectionArchitectureTests.run();
         com.colonybridge.utility.DefenseStatisticsCalculatorTests.run();
         com.colonybridge.utility.SnapshotSummaryCalculatorTests.run();
         com.colonybridge.export.ExportPipelineTests.run();

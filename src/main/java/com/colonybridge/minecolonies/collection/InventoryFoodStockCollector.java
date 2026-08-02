@@ -1,4 +1,4 @@
-package com.colonybridge.minecolonies;
+package com.colonybridge.minecolonies.collection;
 
 import com.colonybridge.api.ExportTrigger;
 import com.colonybridge.model.BridgeMessage;
@@ -30,7 +30,7 @@ import java.util.TreeSet;
  * Keeping inventory traversal here makes the main MineColonies adapter an orchestrator
  * instead of mixing snapshot assembly with cache policy and item-handler scanning.
  */
-final class ColonyInventoryCollector {
+public final class InventoryFoodStockCollector {
     private static final int REFRESH_INTERVAL_DAYS = 2;
     private static final int MAX_HANDLERS = 512;
     private static final int MAX_SLOTS = 16_384;
@@ -40,7 +40,13 @@ final class ColonyInventoryCollector {
 
     private final Map<String, InventoryCacheEntry> cache = new HashMap<>();
 
-    InventoryViews collect(
+    public Result collect(ColonyCollectionContext context, int citizenCount) {
+        context.requireServerThread();
+        return collect(context.colony(), context.buildings(), context.trigger(), context.currentDay(), citizenCount,
+                context.warnings());
+    }
+
+    private Result collect(
             IColony colony,
             List<ICommonBuilding> buildings,
             ExportTrigger trigger,
@@ -49,7 +55,7 @@ final class ColonyInventoryCollector {
             List<BridgeMessage> warnings
     ) {
         InventoryCacheEntry inventory = collectStock(colony, buildings, trigger, currentDay, warnings);
-        return new InventoryViews(
+        return new Result(
                 toStockLedger(inventory, currentDay),
                 collectFoodSupply(colony, buildings, inventory, currentDay, citizenCount, warnings)
         );
@@ -309,7 +315,7 @@ final class ColonyInventoryCollector {
         }
     }
 
-    record InventoryViews(StockLedgerData stockLedger, FoodSupplyData foodSupply) {
+    public record Result(StockLedgerData stockLedger, FoodSupplyData foodSupply) {
     }
 
     private record InventoryCacheEntry(
