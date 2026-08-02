@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.141'
 }
 
-version = '0.28.1'
+version = providers.gradleProperty('mod_version').get()
 group = 'com.colonybridge'
 
 base {
@@ -15,6 +15,34 @@ java {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
+
+def generatedMetadataDir = layout.buildDirectory.dir('generated/sources/metadata/java')
+sourceSets.main.java.srcDir(generatedMetadataDir)
+
+tasks.register('generateBuildMetadata') {
+    inputs.property('modVersion', project.version)
+    outputs.dir(generatedMetadataDir)
+    doLast {
+        def output = generatedMetadataDir.get().file('com/colonybridge/ColonyBridgeConstants.java').asFile
+        output.parentFile.mkdirs()
+        output.text = """package com.colonybridge;
+
+public final class ColonyBridgeConstants {
+    public static final String MOD_ID = \"colonybridge\";
+    public static final String MOD_NAME = \"Colony Bridge\";
+    public static final String VERSION = \"${project.version}\";
+    public static final String PROTOCOL_ID = \"com.colonybridge.snapshot\";
+    public static final int SCHEMA_VERSION = 2;
+    public static final int OUTPUT_LAYOUT_VERSION = 1;
+
+    private ColonyBridgeConstants() {
+    }
+}
+"""
+    }
+}
+
+tasks.named('compileJava').configure { dependsOn tasks.named('generateBuildMetadata') }
 
 neoForge {
     version = '21.1.238'
@@ -82,8 +110,37 @@ tasks.register('runLogicTests', JavaExec) {
     mainClass = 'com.colonybridge.TestRunner'
 }
 
+tasks.register('exportContractFixtures', JavaExec) {
+    group = 'verification'
+    description = 'Serializes canonical contract fixtures from the real Java snapshot models.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.colonybridge.ContractFixtureExporter'
+    args providers.gradleProperty('contractFixtureOutput').orElse(
+            layout.buildDirectory.dir('contract-fixtures').map { it.asFile.absolutePath }
+    ).get()
+}
+
+tasks.register('verifyVersionMetadata') {
+    group = 'verification'
+    description = 'Verifies Gradle, generated Java metadata, and the expanded mod manifest agree.'
+    dependsOn tasks.named('generateBuildMetadata'), tasks.named('processResources')
+    doLast {
+        def expected = project.version.toString()
+        def generated = generatedMetadataDir.get().file('com/colonybridge/ColonyBridgeConstants.java').asFile.text
+        def manifest = layout.buildDirectory.file('resources/main/META-INF/neoforge.mods.toml').get().asFile.text
+        if (!generated.contains("VERSION = \"${expected}\"")) {
+            throw new GradleException('Generated Java-visible version does not match the Gradle project version.')
+        }
+        if (!manifest.contains("version=\"${expected}\"")) {
+            throw new GradleException('Expanded NeoForge manifest version does not match the Gradle project version.')
+        }
+    }
+}
+
 tasks.named('test').configure {
     dependsOn tasks.named('runLogicTests')
+    dependsOn tasks.named('verifyVersionMetadata')
     failOnNoDiscoveredTests = false
 }
 
