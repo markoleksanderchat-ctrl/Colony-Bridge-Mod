@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "bridgeVersion": "0.4.3",
+  "generatedAt": "2026-07-10T01:15:00Z",
+  "trigger": "manual",
+  "fingerprint": "example",
+  "game": {
+    "minecraftVersion": "1.21.1",
+    "loader": "NeoForge",
+    "loaderVersion": "21.1.238",
+    "mineColoniesVersion": "1.1.1319-1.21.1"
+  },
+  "world": {
+    "saveName": "Create Adventures",
+    "worldId": "example",
+    "dimension": "minecraft:overworld",
+    "dedicatedServer": false
+  },
+  "colony": {
+    "id": 1,
+    "name": "Oakwatch",
+    "ownerUuid": null,
+    "ownerName": "Oleksander1000",
+    "dimension": "minecraft:overworld",
+    "center": { "x": 52, "y": 80, "z": -1595 },
+    "claimedChunkCount": null,
+    "citizenCount": 2,
+    "maxCitizenCapacity": 10,
+    "overallHappiness": 7.5,
+    "active": true,
+    "underAttack": false,
+    "raided": false,
+    "abandoned": false,
+    "state": "ACTIVE",
+    "flags": {}
+  },
+  "summary": {
+    "citizenCount": 2,
+    "citizenCapacity": 10,
+    "employedCitizens": 1,
+    "unemployedCitizens": 1,
+    "children": 0,
+    "guards": 0,
+    "buildingCount": 1,
+    "staffedBuildings": 1,
+    "unstaffedBuildings": 0,
+    "activeRequests": 1,
+    "activeConstructionProjects": 0
+  },
+  "citizens": [
+    {
+      "id": 1,
+      "uuid": null,
+      "name": "Kyro H. Colthurst",
+      "ageCategory": "adult",
+      "sex": "male",
+      "currentJob": "Builder",
+      "jobRegistryId": "minecolonies:builder",
+      "workplaceBuildingId": "52,80,-1595",
+      "homeBuildingId": "50,80,-1590",
+      "health": null,
+      "maxHealth": null,
+      "happiness": 7.5,
+      "saturation": 12.0,
+      "activity": "working",
+      "employed": true,
+      "child": false,
+      "alive": true,
+      "sick": false,
+      "injured": false,
+      "sleeping": false,
+      "idle": false,
+      "working": true,
+      "requestingItem": true,
+      "skills": { "strength": 3 },
+      "currentPosition": null,
+      "lastKnownPosition": null
+    }
+  ],
+  "buildings": [
+    {
+      "id": "52,80,-1595",
+      "registryId": "minecolonies:townhall",
+      "type": "Town Hall",
+      "level": 1,
+      "maxLevel": null,
+      "position": { "x": 52, "y": 80, "z": -1595 },
+      "dimension": "minecraft:overworld",
+      "assignedWorkerIds": [1],
+      "workerCapacity": 1,
+      "staffed": true,
+      "active": true,
+      "upgrading": false,
+      "beingBuilt": false,
+      "structurallyComplete": true,
+      "targetLevel": null,
+      "assignedBuilderCitizenId": null,
+      "openRequestIds": ["abc"],
+      "state": {}
+    }
+  ],
+  "requests": [
+    {
+      "id": "abc",
+      "type": "item",
+      "requestingCitizenId": 1,
+      "requestingBuildingId": "52,80,-1595",
+      "requestedItemRegistryId": "minecraft:oak_log",
+      "requestedItemDisplayName": "Oak Log",
+      "requestedQuantity": 32,
+      "remainingQuantity": 12,
+      "state": "ASSIGNED",
+      "parentRequestId": null,
+      "childRequestIds": [],
+      "resolver": null,
+      "complete": false,
+      "cancelled": false,
+      "assigned": true,
+      "inProgress": false,
+      "unresolved": false,
+      "details": {}
+    }
+  ],
+  "construction": [],
+  "capabilities": {
+    "colonies": { "supported": true, "reason": null },
+    "warehouseInventoryTotals": { "supported": false, "reason": "Deferred" }
+  },
+  "warnings": [],
+  "errors": []
+}

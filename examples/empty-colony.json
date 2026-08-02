@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "bridgeVersion": "0.4.3",
+  "generatedAt": "2026-07-10T01:00:00Z",
+  "trigger": "manual",
+  "fingerprint": null,
+  "game": {
+    "minecraftVersion": "1.21.1",
+    "loader": "NeoForge",
+    "loaderVersion": "21.1.238",
+    "mineColoniesVersion": "1.1.1319-1.21.1"
+  },
+  "world": {
+    "saveName": "Create Adventures",
+    "worldId": "example",
+    "dimension": "minecraft:overworld",
+    "dedicatedServer": false
+  },
+  "colony": {
+    "id": 1,
+    "name": "Empty Colony",
+    "ownerUuid": null,
+    "ownerName": "Player",
+    "dimension": "minecraft:overworld",
+    "center": null,
+    "claimedChunkCount": null,
+    "citizenCount": 0,
+    "maxCitizenCapacity": null,
+    "overallHappiness": null,
+    "active": true,
+    "underAttack": false,
+    "raided": false,
+    "abandoned": false,
+    "state": "ACTIVE",
+    "flags": {}
+  },
+  "summary": {
+    "citizenCount": 0,
+    "citizenCapacity": null,
+    "employedCitizens": 0,
+    "unemployedCitizens": 0,
+    "children": 0,
+    "guards": 0,
+    "buildingCount": 0,
+    "staffedBuildings": 0,
+    "unstaffedBuildings": 0,
+    "activeRequests": 0,
+    "activeConstructionProjects": 0
+  },
+  "citizens": [],
+  "buildings": [],
+  "requests": [],
+  "construction": [],
+  "capabilities": {
+    "colonies": { "supported": true, "reason": null },
+    "citizens": { "supported": true, "reason": null },
+    "buildings": { "supported": true, "reason": null },
+    "requests": { "supported": true, "reason": null },
+    "constructionMaterials": {
+      "supported": false,
+      "reason": "Not currently exposed by the read-only bridge"
+    }
+  },
+  "warnings": [],
+  "errors": []
+}

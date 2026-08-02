@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "CEC",
+    "CLC",
+    "CCC"
+  ],
+  "key": {
+    "C": { "item": "minecraft:copper_ingot" },
+    "E": { "item": "minecraft:emerald" },
+    "L": { "item": "minecraft:lectern" }
+  },
+  "result": {
+    "id": "colonybridge:royal_exchange",
+    "count": 1
+  }
+}

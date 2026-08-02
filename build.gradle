@@ -1,0 +1,113 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+version = '0.28.1'
+group = 'com.colonybridge'
+
+base {
+    archivesName = 'colonybridge'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+neoForge {
+    version = '21.1.238'
+
+    runs {
+        client {
+            client()
+            gameDirectory = file('run/client')
+        }
+        server {
+            server()
+            gameDirectory = file('run/server')
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        colonybridge {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+def instanceMods = file('C:/Users/marko/curseforge/minecraft/Instances/Create Adventures/mods')
+def localModJar = { pattern ->
+    def matches = instanceMods.exists() ? instanceMods.listFiles().findAll { it.name ==~ pattern } : []
+    if (matches.isEmpty()) {
+        throw new GradleException("Required local development mod JAR not found in ${instanceMods}: ${pattern}")
+    }
+    matches.sort { -it.lastModified() }.first()
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    compileOnly files(localModJar(/minecolonies-1\.1\.1319-1\.21\.1\.jar/))
+    compileOnly files(localModJar(/structurize-.*\.jar/))
+    compileOnly files(localModJar(/blockui-.*\.jar/))
+    compileOnly files(localModJar(/domum-ornamentum-.*\.jar/))
+    compileOnly files(localModJar(/multipiston-.*\.jar/))
+    compileOnly files(localModJar(/jei-1\.21\.1-neoforge-.*\.jar/))
+
+    runtimeOnly files(localModJar(/minecolonies-1\.1\.1319-1\.21\.1\.jar/))
+    runtimeOnly files(localModJar(/structurize-.*\.jar/))
+    runtimeOnly files(localModJar(/blockui-.*\.jar/))
+    runtimeOnly files(localModJar(/domum-ornamentum-.*\.jar/))
+    runtimeOnly files(localModJar(/multipiston-.*\.jar/))
+
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs.addAll(['-Xlint:all', '-Xlint:-processing'])
+}
+
+tasks.register('runLogicTests', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free Colony Bridge logic tests.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.colonybridge.TestRunner'
+}
+
+tasks.named('test').configure {
+    dependsOn tasks.named('runLogicTests')
+    failOnNoDiscoveredTests = false
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def props = [
+        mod_id: 'colonybridge',
+        mod_name: 'Colony Bridge',
+        mod_version: version,
+        minecraft_version_range: '[1.21.1,1.22)',
+        neo_version_range: '[21.1.0,)',
+        minecolonies_version_range: '[1.1.1319-1.21.1,)'
+    ]
+    inputs.properties props
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand props
+    }
+}
+
+jar {
+    includeEmptyDirs = false
+    manifest {
+        attributes([
+            'Specification-Title': 'Colony Bridge',
+            'Specification-Vendor': 'Colony Bridge',
+            'Specification-Version': '1',
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': 'Colony Bridge'
+        ])
+    }
+}
