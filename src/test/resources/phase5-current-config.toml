@@ -1,0 +1,41 @@
+[export]
+enabled = true
+exportOnStartup = false
+exportOnPlayerJoin = true
+exportOnShutdown = true
+exportOnLastPlayerDisconnect = false
+periodicExportEnabled = true
+periodicExportSeconds = 300
+retainSnapshots = 75
+prettyPrintJson = false
+showExportProgress = true
+includeCitizenPositions = true
+includeOwnerUuid = false
+
+[remoteSync]
+enabled = true
+endpoint = "https://example.com/snapshot"
+token = "fixture-token"
+
+[notifications]
+dayCounterEnabled = true
+
+[royalExchange]
+quoteDelaySeconds = 4
+quoteValiditySeconds = 180
+eventFrequencyMinutes = 120
+volatilityStrength = 0.2
+minimumPriceMultiplier = 0.55
+maximumPriceMultiplier = 1.9
+buyingEnabled = true
+operatorEventControls = false
+sellingEnabled = true
+sellPriceRatio = 0.7
+dailySellDiamondLimit = 80
+activeContractCount = 4
+contractDurationMinutes = 480
+contractRewardPremium = 1.4
+onlinePricesEnabled = true
+onlineRefreshSeconds = 90
+onlineMaximumAgeMinutes = 240
+onlineInfluenceStrength = 0.8

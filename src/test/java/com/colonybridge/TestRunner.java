@@ -39,6 +39,7 @@ public final class TestRunner {
         com.colonybridge.utility.DefenseStatisticsCalculatorTests.run();
         com.colonybridge.utility.SnapshotSummaryCalculatorTests.run();
         com.colonybridge.export.ExportPipelineTests.run();
+        com.colonybridge.bootstrap.Phase5ArchitectureTests.run();
         com.colonybridge.market.MarketLogicTests.run();
         System.out.println("Colony Bridge logic tests passed.");
     }

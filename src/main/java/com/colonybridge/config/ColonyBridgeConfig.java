@@ -105,24 +105,20 @@ public final class ColonyBridgeConfig {
     }
 
     public static BridgeConfigValues values() {
-        return new BridgeConfigValues(
+        return settings().bridgeValues();
+    }
+
+    public static BridgeSettings settings() {
+        return new BridgeSettings(
                 ENABLED.get(),
-                EXPORT_ON_STARTUP.get(),
-                EXPORT_ON_PLAYER_JOIN.get(),
-                EXPORT_ON_SHUTDOWN.get(),
-                EXPORT_ON_LAST_PLAYER_DISCONNECT.get(),
-                PERIODIC_EXPORT_ENABLED.get(),
-                PERIODIC_EXPORT_SECONDS.get(),
-                RETAIN_SNAPSHOTS.get(),
-                PRETTY_PRINT_JSON.get(),
-                SHOW_EXPORT_PROGRESS.get(),
-                INCLUDE_CITIZEN_POSITIONS.get(),
-                INCLUDE_OWNER_UUID.get(),
-                DAY_COUNTER_ENABLED.get(),
-                REMOTE_SYNC_ENABLED.get(),
-                REMOTE_ENDPOINT.get(),
-                REMOTE_TOKEN.get()
-        ).validated();
+                new ExportSettings(EXPORT_ON_STARTUP.get(), EXPORT_ON_PLAYER_JOIN.get(), EXPORT_ON_SHUTDOWN.get(),
+                        EXPORT_ON_LAST_PLAYER_DISCONNECT.get(), PERIODIC_EXPORT_ENABLED.get(),
+                        PERIODIC_EXPORT_SECONDS.get(), RETAIN_SNAPSHOTS.get(), PRETTY_PRINT_JSON.get(),
+                        SHOW_EXPORT_PROGRESS.get()),
+                new PrivacySettings(INCLUDE_CITIZEN_POSITIONS.get(), INCLUDE_OWNER_UUID.get()),
+                new NotificationSettings(DAY_COUNTER_ENABLED.get()),
+                new RemoteSyncSettings(REMOTE_SYNC_ENABLED.get(), REMOTE_ENDPOINT.get(), REMOTE_TOKEN.get()),
+                new MarketSettings(marketValues(), onlineMarketValues()));
     }
 
     public static MarketConfig marketValues() {

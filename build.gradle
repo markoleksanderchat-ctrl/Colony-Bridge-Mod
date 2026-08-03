@@ -81,6 +81,7 @@ def localModJar = { pattern ->
 
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation 'com.electronwill.night-config:toml:3.8.3'
 
     compileOnly files(localModJar(/minecolonies-1\.1\.1319-1\.21\.1\.jar/))
     compileOnly files(localModJar(/structurize-.*\.jar/))
