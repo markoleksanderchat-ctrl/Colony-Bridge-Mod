@@ -26,7 +26,7 @@ The project was built against the installed Create Adventures CurseForge instanc
 ## Installation
 
 1. Build the project with `gradlew build`.
-2. Copy `build/libs/colonybridge-0.28.1.jar` into your Minecraft instance `mods` folder.
+2. Copy `build/libs/colonybridge-0.28.2.jar` into your Minecraft instance `mods` folder.
 3. Launch Minecraft with NeoForge and MineColonies installed.
 4. Start or load a world containing MineColonies.
 5. Check `<instance>/colonybridge/bridge-info.json` and `<instance>/colonybridge/latest/`.

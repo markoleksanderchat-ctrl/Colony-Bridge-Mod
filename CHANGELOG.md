@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.2
+
+- Complete the internal reliability reorganization without changing Minecraft gameplay, snapshot schema, or the one-way market boundary.
+- Add final collection-performance evidence and clean Windows release verification.
+
 ## 0.28.1
 
 - Keep the world visible behind the Royal Exchange, matching standard Minecraft container screens instead of applying an additional dark backdrop.
