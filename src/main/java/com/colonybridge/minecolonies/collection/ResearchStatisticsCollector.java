@@ -46,8 +46,10 @@ public final class ResearchStatisticsCollector {
         Map<String, Integer> today = new TreeMap<>();
         Map<String, Integer> recent = new TreeMap<>();
         int windowDays = 7;
+        int typesConsidered = 0;
         try {
             List<String> types = context.colony().getStatisticsManager().getStatTypes().stream().sorted().toList();
+            typesConsidered = types.size();
             int exported = Math.min(types.size(), MAX_STATISTIC_TYPES);
             for (int index = 0; index < exported; index++) {
                 String type = types.get(index);
@@ -63,7 +65,7 @@ public final class ResearchStatisticsCollector {
         } catch (Exception exception) {
             context.warnings().add(CollectionSupport.error("statistics", context.colonyId(), "STATISTICS_READ_FAILED", exception));
         }
-        return new StatisticsCollection(lifetime, new RecentStatisticsData(context.currentDay(), windowDays, today, recent));
+        return new StatisticsCollection(lifetime, new RecentStatisticsData(context.currentDay(), windowDays, today, recent), typesConsidered);
     }
 
     private String translationKey(Object contents) {
@@ -73,6 +75,6 @@ public final class ResearchStatisticsCollector {
     public record Result(ResearchData research, StatisticsCollection statistics) {
     }
 
-    public record StatisticsCollection(Map<String, Integer> lifetime, RecentStatisticsData recent) {
+    public record StatisticsCollection(Map<String, Integer> lifetime, RecentStatisticsData recent, int typesConsidered) {
     }
 }

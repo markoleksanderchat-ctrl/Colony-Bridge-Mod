@@ -17,23 +17,26 @@ import java.util.*;
 public final class LivestockCollector {
     private final LivestockObservationCache cache = new LivestockObservationCache();
 
-    public LivestockData collect(ColonyCollectionContext context) {
+    public Result collect(ColonyCollectionContext context) {
         context.requireServerThread();
         if (context.trigger() == ExportTrigger.DISCONNECT || context.trigger() == ExportTrigger.SHUTDOWN) {
             Optional<LivestockData> retained = cache.get(context.colony().getID());
-            if (retained.isPresent()) return retained.get();
+            if (retained.isPresent()) return new Result(retained.get(), 0, 0);
         }
+        int hutsConsidered = 0;
+        int entitiesConsidered = 0;
         try {
             Map<String, Integer> byType = new TreeMap<>();
             Set<UUID> observed = new HashSet<>();
             Map<String, HutAccumulator> huts = new TreeMap<>();
             if (!(context.colony().getWorld() instanceof ServerLevel level)) {
-                return new LivestockData(null, null, null, Map.of(), List.of());
+                return new Result(new LivestockData(null, null, null, Map.of(), List.of()), 0, 0);
             }
             for (ICommonBuilding common : context.buildings()) {
                 if (!(common instanceof IBuilding hut)) continue;
                 List<AnimalHerdingModule> modules = hut.getModules(AnimalHerdingModule.class);
                 if (modules.isEmpty()) continue;
+                hutsConsidered++;
                 List<Integer> workers = hut.getAllAssignedCitizen().stream().filter(Objects::nonNull)
                         .filter(citizen -> {
                             IJob<?> job = CollectionSupport.safe(citizen::getJob, null);
@@ -51,6 +54,7 @@ public final class LivestockCollector {
                 for (AnimalHerdingModule module : modules) {
                     for (Animal animal : WorldUtil.getEntitiesWithinBuilding(level, Animal.class, hut, module::isCompatible)) {
                         if (!observed.add(animal.getUUID())) continue;
+                        entitiesConsidered++;
                         String type = BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).toString();
                         byType.merge(type, 1, Integer::sum);
                         accumulator.add(type);
@@ -62,12 +66,14 @@ public final class LivestockCollector {
             int total = byType.values().stream().mapToInt(Integer::intValue).sum();
             LivestockData result = new LivestockData(total, total, 0, byType, hutData);
             cache.put(context.colony().getID(), result);
-            return result;
+            return new Result(result, entitiesConsidered, hutsConsidered);
         } catch (Exception exception) {
             context.warnings().add(CollectionSupport.error("livestock", context.colonyId(), "LIVESTOCK_READ_FAILED", exception));
-            return new LivestockData(null, null, null, Map.of(), List.of());
+            return new Result(new LivestockData(null, null, null, Map.of(), List.of()), entitiesConsidered, hutsConsidered);
         }
     }
+
+    public record Result(LivestockData data, int entitiesConsidered, int hutsConsidered) { }
 
     private static final class HutAccumulator {
         private final String buildingId;

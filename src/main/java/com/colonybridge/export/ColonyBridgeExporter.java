@@ -1,6 +1,7 @@
 package com.colonybridge.export;
 
 import com.colonybridge.ColonyBridgeConstants;
+import com.colonybridge.api.CollectionProfile;
 import com.colonybridge.api.ExportTrigger;
 import com.colonybridge.api.MineColoniesAdapter;
 import com.colonybridge.api.ServerLevelContext;
@@ -31,9 +32,11 @@ public final class ColonyBridgeExporter {
 
     private final Logger logger;
     private final MineColoniesAdapter adapter;
+    private final BoundedDurationSamples collectionSamples = new BoundedDurationSamples(64);
     private final Map<StoreKey, SnapshotStore> stores = new HashMap<>();
     private volatile ExportStatus status;
     private volatile ExportTrigger lastSuccessfulTrigger;
+    private volatile CollectionProfile lastCollectionProfile = CollectionProfile.EMPTY;
     private CompletableFuture<ExportResult> activeExport;
     private int queuedManualExports;
     private int coalescedAutomaticExports;
@@ -78,6 +81,14 @@ public final class ColonyBridgeExporter {
 
     public synchronized boolean remotePublishQueued() {
         return remoteQueue != null && remoteQueue.queued();
+    }
+
+    public CollectionProfile lastCollectionProfile() {
+        return lastCollectionProfile;
+    }
+
+    public MainThreadTimingSummary collectionTimingSummary() {
+        return collectionSamples.summary();
     }
 
     public boolean hasRecentSuccessfulExport(Duration maxAge) {
@@ -158,6 +169,10 @@ public final class ColonyBridgeExporter {
             return;
         }
         long collectionMs = elapsedMillis(collectionStarted);
+        lastCollectionProfile = adapter.lastCollectionProfile();
+        collectionSamples.add(collectionMs);
+        logger.debug("Colony Bridge collection profile: counts={} stagesUs={} mainThread={}",
+                lastCollectionProfile, lastCollectionProfile.stageMicros(), collectionSamples.summary());
 
         if (request.colonyId().isPresent() && snapshots.isEmpty()) {
             ExportTimings timings = new ExportTimings(collectionMs, 0, 0, 0, 0, 0, 0,

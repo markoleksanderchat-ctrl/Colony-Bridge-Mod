@@ -16,15 +16,17 @@ import java.util.*;
 public final class DefenseCollector {
     private static final int MAX_TYPES_PER_BUILDING = 256;
 
-    public DefenseStatisticsData collect(ColonyCollectionContext context,
-                                         ResearchStatisticsCollector.StatisticsCollection statistics) {
+    public Result collect(ColonyCollectionContext context,
+                          ResearchStatisticsCollector.StatisticsCollection statistics) {
         context.requireServerThread();
         int windowDays = statistics.recent().windowDays();
         Map<String, Integer> lifetime = new TreeMap<>(), today = new TreeMap<>(), recent = new TreeMap<>();
         int butchered = 0, butcheredToday = 0, butcheredRecent = 0;
+        int buildingsConsidered = 0;
         Set<IBuilding> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         for (ICommonBuilding common : context.buildings()) {
             if (!(common instanceof IBuilding building) || !seen.add(building)) continue;
+            buildingsConsidered++;
             try {
                 if (!building.hasModule(BuildingModules.STATS_MODULE)) continue;
                 BuildingStatisticsModule module = building.getModule(BuildingModules.STATS_MODULE);
@@ -63,12 +65,15 @@ public final class DefenseCollector {
         }
         warnIfDiverged(context, statistics, lifetime, today, recent);
         Map<String, String> categories = entityCategories();
-        return new DefenseStatisticsData(
+        DefenseStatisticsData data = new DefenseStatisticsData(
                 DefenseStatisticsCalculator.calculate(statistics.lifetime().get("mobs_killed"), lifetime, categories),
                 DefenseStatisticsCalculator.calculate(statistics.recent().today().get("mobs_killed"), today, categories),
                 DefenseStatisticsCalculator.calculate(statistics.recent().recentWindow().get("mobs_killed"), recent, categories),
                 context.currentDay(), windowDays, butchered, butcheredToday, butcheredRecent);
+        return new Result(data, buildingsConsidered);
     }
+
+    public record Result(DefenseStatisticsData data, int buildingsConsidered) { }
 
     private void warnIfDiverged(ColonyCollectionContext context,
                                 ResearchStatisticsCollector.StatisticsCollection statistics,

@@ -54,14 +54,16 @@ public final class InventoryFoodStockCollector {
             int citizenCount,
             List<BridgeMessage> warnings
     ) {
-        InventoryCacheEntry inventory = collectStock(colony, buildings, trigger, currentDay, warnings);
+        StockCollection stock = collectStock(colony, buildings, trigger, currentDay, warnings);
+        InventoryCacheEntry inventory = stock.inventory();
         return new Result(
                 toStockLedger(inventory, currentDay),
-                collectFoodSupply(colony, buildings, inventory, currentDay, citizenCount, warnings)
+                collectFoodSupply(colony, buildings, inventory, currentDay, citizenCount, warnings),
+                stock.cacheHit()
         );
     }
 
-    private InventoryCacheEntry collectStock(
+    private StockCollection collectStock(
             IColony colony,
             List<ICommonBuilding> buildings,
             ExportTrigger trigger,
@@ -78,7 +80,7 @@ public final class InventoryFoodStockCollector {
                 cached.createdAtStartup(),
                 startup
         )) {
-            return cached;
+            return new StockCollection(cached, true);
         }
 
         Map<String, Long> counts = new HashMap<>();
@@ -129,7 +131,7 @@ public final class InventoryFoodStockCollector {
                         "USING_CACHED_STOCK",
                         "The scheduled stock refresh failed, so the previous inventory count was retained."
                 ));
-                return cached;
+                return new StockCollection(cached, true);
             }
             truncated = true;
         }
@@ -155,7 +157,7 @@ public final class InventoryFoodStockCollector {
                 truncated
         );
         cache.put(cacheKey, refreshed);
-        return refreshed;
+        return new StockCollection(refreshed, false);
     }
 
     private StockLedgerData toStockLedger(InventoryCacheEntry inventory, Integer currentDay) {
@@ -315,8 +317,10 @@ public final class InventoryFoodStockCollector {
         }
     }
 
-    public record Result(StockLedgerData stockLedger, FoodSupplyData foodSupply) {
+    public record Result(StockLedgerData stockLedger, FoodSupplyData foodSupply, boolean cacheHit) {
     }
+
+    private record StockCollection(InventoryCacheEntry inventory, boolean cacheHit) { }
 
     private record InventoryCacheEntry(
             Integer refreshedColonyDay,

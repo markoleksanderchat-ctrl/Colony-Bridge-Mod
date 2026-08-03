@@ -129,6 +129,17 @@ tasks.register('measurePhase4', JavaExec) {
     ).get()
 }
 
+tasks.register('measurePhase12', JavaExec) {
+    group = 'verification'
+    description = 'Measures the Phase 12 Bridge serialization and storage baseline after collection profiling.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.colonybridge.export.Phase4PerformanceProbe'
+    args providers.gradleProperty('phase12MeasurementOutput').orElse(
+            layout.buildDirectory.file('reports/phase12-performance.json').map { it.asFile.absolutePath }
+    ).get()
+}
+
 tasks.register('verifyVersionMetadata') {
     group = 'verification'
     description = 'Verifies Gradle, generated Java metadata, and the expanded mod manifest agree.'

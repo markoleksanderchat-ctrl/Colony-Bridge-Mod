@@ -29,10 +29,13 @@ public final class Phase4PerformanceProbe {
 
         JsonObject report = new JsonObject();
         report.addProperty("measuredAt", Instant.now().toString());
+        report.addProperty("phase", 12);
         report.addProperty("iterations", ITERATIONS);
         report.addProperty("collectionImplementationChanged", false);
         report.addProperty("collectionTraversalRegressionPercent", 0);
         report.addProperty("runtimeCollectionTimingRequired", true);
+        report.addProperty("runtimeCollectionInstrumentation", "per-collector counts/timings plus rolling p50/p95/max");
+        report.addProperty("optimizationDecision", "retain measured single-serialization and fingerprint-cache paths");
         report.add("fixtures", fixtures);
         Path output = Path.of(args[0]).toAbsolutePath().normalize();
         Files.createDirectories(output.getParent());
