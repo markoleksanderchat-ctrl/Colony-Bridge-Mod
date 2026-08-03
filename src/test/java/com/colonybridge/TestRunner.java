@@ -41,6 +41,7 @@ public final class TestRunner {
         com.colonybridge.export.ExportPipelineTests.run();
         com.colonybridge.bootstrap.Phase5ArchitectureTests.run();
         com.colonybridge.market.MarketLogicTests.run();
+        com.colonybridge.market.Phase6MarketArchitectureTests.run();
         System.out.println("Colony Bridge logic tests passed.");
     }
 

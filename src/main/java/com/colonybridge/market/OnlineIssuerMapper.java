@@ -6,7 +6,9 @@ import com.google.gson.JsonParser;
 
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 
@@ -16,6 +18,7 @@ public final class OnlineIssuerMapper {
             "HABD", "BOWY", "FLET", "CUTL", "ARMR", "APOT", "BAKR", "BUTR", "POUL", "FRUT",
             "SALT", "SHIP", "SCRV", "HORN", "LORN", "FOND", "ADVT", "WIRE", "MUSC", "GARD",
             "COLL", "UPHL");
+    public static final String CATALOG_CHECKSUM = "A5093542FE72BC8425FC859465814B0BDC34505BF1BC646E9A785DF008378DA1";
     private static final Map<String, String> ITEM_TICKERS = loadItemTickers();
     public static final int CATALOG_SIZE = ITEM_TICKERS.size();
 
@@ -75,6 +78,10 @@ public final class OnlineIssuerMapper {
         return "STPL";
     }
 
+    static Map<String, String> catalog() {
+        return ITEM_TICKERS;
+    }
+
     private static Map<String, String> loadItemTickers() {
         try (var stream = OnlineIssuerMapper.class.getResourceAsStream("/data/colonybridge/market/online-item-issuers.json")) {
             if (stream == null) throw new IllegalStateException("Royal Exchange item issuer catalog is missing.");
@@ -90,10 +97,27 @@ public final class OnlineIssuerMapper {
                 mapped.put(entry.getKey(), ticker);
             }
             if (mapped.size() != expected) throw new IllegalStateException("Royal Exchange item issuer catalog count is invalid.");
+            Set<String> usedTickers = Set.copyOf(mapped.values());
+            if (!usedTickers.equals(TICKERS)) throw new IllegalStateException("Royal Exchange issuer coverage is invalid.");
+            String checksum = checksum(mapped);
+            if (!CATALOG_CHECKSUM.equals(checksum)) {
+                throw new IllegalStateException("Royal Exchange item issuer catalog checksum is invalid: " + checksum);
+            }
             return Map.copyOf(mapped);
         } catch (Exception failure) {
             throw new ExceptionInInitializerError(failure);
         }
+    }
+
+    static String checksum(Map<String, String> mapped) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        mapped.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            digest.update(entry.getKey().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) '=');
+            digest.update(entry.getValue().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) '\n');
+        });
+        return HexFormat.of().withUpperCase().formatHex(digest.digest());
     }
 
     private static boolean contains(String value, String... needles) {

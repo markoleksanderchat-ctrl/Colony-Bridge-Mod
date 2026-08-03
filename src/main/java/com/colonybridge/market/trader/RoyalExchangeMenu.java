@@ -25,7 +25,26 @@ public final class RoyalExchangeMenu extends AbstractContainerMenu {
     public static final int PREV_CONTRACT = 8;
     public static final int NEXT_CONTRACT = 9;
     public static final int COMPLETE_CONTRACT = 10;
-    private static final int DATA_COUNT = 19;
+    public static final int DATA_SELECTED_ITEM = 0;
+    public static final int DATA_QUANTITY = 1;
+    public static final int DATA_QUOTE_STATE = 2;
+    public static final int DATA_DIAMOND_COST = 3;
+    public static final int DATA_QUOTE_SECONDS = 4;
+    public static final int DATA_BASE_PRICE = 5;
+    public static final int DATA_CURRENT_PRICE = 6;
+    public static final int DATA_CONDITION = 7;
+    public static final int DATA_TRADE_DIRECTION = 8;
+    public static final int DATA_CONTRACT_VIEW = 9;
+    public static final int DATA_CONTRACT_ITEM = 10;
+    public static final int DATA_CONTRACT_QUANTITY = 11;
+    public static final int DATA_CONTRACT_REWARD = 12;
+    public static final int DATA_CONTRACT_SECONDS = 13;
+    public static final int DATA_CONTRACT_INDEX = 14;
+    public static final int DATA_CONTRACT_COUNT = 15;
+    public static final int DATA_CONTRACT_STATE = 16;
+    public static final int DATA_SELL_ALLOWANCE = 17;
+    public static final int DATA_ONLINE_STATE = 18;
+    public static final int DATA_COUNT = 19;
 
     private final Inventory inventory;
     private final MarketManager manager;
@@ -165,14 +184,7 @@ public final class RoyalExchangeMenu extends AbstractContainerMenu {
     private TradeDirection tradeDirection() { return data.get(8) == 1 ? TradeDirection.SELL : TradeDirection.BUY; }
 
     private static int quantityStep(int quantity) {
-        if (quantity < 8) return 1;
-        if (quantity < 16) return 4;
-        if (quantity < 32) return 8;
-        if (quantity < 64) return 16;
-        if (quantity < 128) return 32;
-        if (quantity < 256) return 64;
-        if (quantity < 512) return 128;
-        return 256;
+        return RoyalExchangePresentationModel.quantityStep(quantity);
     }
 
     public Item selectedItemClient() { return selectedItem(); }

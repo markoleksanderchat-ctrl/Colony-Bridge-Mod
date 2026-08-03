@@ -20,8 +20,8 @@ import java.util.List;
 import java.util.Locale;
 
 public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExchangeMenu> {
-    public static final int SCREEN_WIDTH = 316;
-    public static final int SCREEN_HEIGHT = 236;
+    public static final int SCREEN_WIDTH = RoyalExchangeLayout.WIDTH;
+    public static final int SCREEN_HEIGHT = RoyalExchangeLayout.HEIGHT;
     private static final int HEADER = 0xff17231f;
     private static final int PANEL = 0xffe4d2af;
     private static final int PANEL_LIGHT = 0xfff7edd8;
@@ -32,8 +32,8 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
     private static final int BRASS = 0xff684719;
     private static final int CARD_EDGE = 0xff9b7b48;
     private static final int VALUE_BG = 0xffd7e5da;
-    private static final int VISIBLE_ROWS = 7;
-    private static final int RIGHT_TEXT_WIDTH = 130;
+    private static final int VISIBLE_ROWS = RoyalExchangeLayout.VISIBLE_ROWS;
+    private static final int RIGHT_TEXT_WIDTH = RoyalExchangeLayout.RIGHT_TEXT_WIDTH;
 
     private final List<Item> filtered = new ArrayList<>();
     private EditBox search;
@@ -98,7 +98,7 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
             return needle.isEmpty() || key.getPath().contains(needle)
                     || item.getDefaultInstance().getHoverName().getString().toLowerCase(Locale.ROOT).contains(needle);
         }).sorted(Comparator.comparing(item -> item.getDefaultInstance().getHoverName().getString())).forEach(filtered::add);
-        scroll = Math.min(scroll, Math.max(0, filtered.size() - VISIBLE_ROWS));
+        scroll = RoyalExchangePresentationModel.clampScroll(scroll, filtered.size());
     }
 
     private void send(int id) {
@@ -129,9 +129,13 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (!menu.contractView() && button == 0 && mouseX >= leftPos + 14 && mouseX < leftPos + 140
-                && mouseY >= topPos + 65 && mouseY < topPos + 205) {
-            int index = scroll + (int) ((mouseY - (topPos + 65)) / 20);
+        if (!menu.contractView() && button == 0
+                && mouseX >= leftPos + RoyalExchangeLayout.ITEM_LIST_LEFT
+                && mouseX < leftPos + RoyalExchangeLayout.ITEM_LIST_RIGHT
+                && mouseY >= topPos + RoyalExchangeLayout.ITEM_LIST_TOP
+                && mouseY < topPos + RoyalExchangeLayout.ITEM_LIST_BOTTOM) {
+            int index = scroll + (int) ((mouseY - (topPos + RoyalExchangeLayout.ITEM_LIST_TOP))
+                    / RoyalExchangeLayout.ITEM_ROW_HEIGHT);
             if (index >= 0 && index < filtered.size()) {
                 send(RoyalExchangeMenu.SELECT_ITEM_BASE + BuiltInRegistries.ITEM.getId(filtered.get(index)));
                 return true;
@@ -144,7 +148,7 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (!menu.contractView() && mouseX >= leftPos + 10 && mouseX < leftPos + 146
                 && mouseY >= topPos + 63 && mouseY < topPos + 207) {
-            scroll = Math.max(0, Math.min(Math.max(0, filtered.size() - VISIBLE_ROWS), scroll - (int) Math.signum(scrollY)));
+            scroll = RoyalExchangePresentationModel.clampScroll(scroll - (int) Math.signum(scrollY), filtered.size());
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -333,21 +337,22 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
     }
 
     private void updateControls() {
-        boolean contracts = menu.contractView();
-        search.visible = !contracts;
-        decrease.visible = !contracts;
-        increase.visible = !contracts;
-        quote.visible = !contracts;
-        buy.visible = !contracts && menu.quoteState() == 2;
+        RoyalExchangePresentationModel.Controls controls = RoyalExchangePresentationModel.controls(
+                menu.contractView(), menu.sellMode(), menu.quoteState(), menu.contractCount());
+        search.visible = controls.tradeControlsVisible();
+        decrease.visible = controls.tradeControlsVisible();
+        increase.visible = controls.tradeControlsVisible();
+        quote.visible = controls.tradeControlsVisible();
+        buy.visible = controls.completeTradeVisible();
         buy.active = buy.visible;
-        quote.setMessage(Component.literal(menu.sellMode() ? "Request Sell Quote" : "Request Buy Quote"));
-        buy.setMessage(Component.literal(menu.sellMode() ? "Sell Goods" : "Buy Goods"));
-        buyMode.active = contracts || menu.sellMode();
-        sellMode.active = contracts || !menu.sellMode();
-        contractsMode.active = !contracts;
-        contractPrev.visible = contracts && menu.contractCount() > 1;
-        contractNext.visible = contracts && menu.contractCount() > 1;
-        completeContract.visible = contracts && menu.contractCount() > 0;
+        quote.setMessage(Component.literal(controls.quoteLabel()));
+        buy.setMessage(Component.literal(controls.tradeLabel()));
+        buyMode.active = controls.buyModeActive();
+        sellMode.active = controls.sellModeActive();
+        contractsMode.active = controls.contractsModeActive();
+        contractPrev.visible = controls.contractNavigationVisible();
+        contractNext.visible = controls.contractNavigationVisible();
+        completeContract.visible = controls.completeContractVisible();
         completeContract.active = completeContract.visible;
     }
 
@@ -362,9 +367,8 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
     }
 
     private String fit(String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) return text;
-        String ellipsis = "...";
-        return font.plainSubstrByWidth(text, Math.max(0, maxWidth - font.width(ellipsis))).stripTrailing() + ellipsis;
+        return RoyalExchangePresentationModel.fit(text, maxWidth, font::width,
+                width -> font.plainSubstrByWidth(text, width));
     }
 
     private void drawWrapped(GuiGraphics graphics, String text, int x, int y, int width, int color, int maxLines) {
@@ -377,8 +381,12 @@ public final class RoyalExchangeScreen extends AbstractContainerScreen<RoyalExch
 
     private Item hoveredItem(int mouseX, int mouseY) {
         if (menu.contractView()) return Items.AIR;
-        if (mouseX < leftPos + 14 || mouseX >= leftPos + 140 || mouseY < topPos + 65 || mouseY >= topPos + 205) return Items.AIR;
-        int index = scroll + (mouseY - (topPos + 65)) / 20;
+        if (mouseX < leftPos + RoyalExchangeLayout.ITEM_LIST_LEFT
+                || mouseX >= leftPos + RoyalExchangeLayout.ITEM_LIST_RIGHT
+                || mouseY < topPos + RoyalExchangeLayout.ITEM_LIST_TOP
+                || mouseY >= topPos + RoyalExchangeLayout.ITEM_LIST_BOTTOM) return Items.AIR;
+        int index = scroll + (mouseY - (topPos + RoyalExchangeLayout.ITEM_LIST_TOP))
+                / RoyalExchangeLayout.ITEM_ROW_HEIGHT;
         return index >= 0 && index < filtered.size() ? filtered.get(index) : Items.AIR;
     }
 

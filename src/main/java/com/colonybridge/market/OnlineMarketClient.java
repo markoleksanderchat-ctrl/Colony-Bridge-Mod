@@ -2,8 +2,6 @@ package com.colonybridge.market;
 
 import com.colonybridge.ColonyBridge;
 import com.colonybridge.ColonyBridgeConstants;
-import com.colonybridge.export.AtomicFileWriter;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -11,18 +9,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Queue;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 final class OnlineMarketClient {
     static final List<URI> ENDPOINTS = List.of(
@@ -32,7 +24,7 @@ final class OnlineMarketClient {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
 
-    private final Path cachePath;
+    private final OnlineMarketCache cache;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER).build();
     private OnlineMarketSnapshot snapshot;
@@ -40,10 +32,14 @@ final class OnlineMarketClient {
     private long nextRefreshAt;
     private String lastFailure;
     private URI activeEndpoint;
-    private final Queue<OnlineMarketEvent> pendingEvents = new ArrayDeque<>();
+    private final OnlineAnomalyInbox anomalyInbox = new OnlineAnomalyInbox();
 
     OnlineMarketClient(Path cachePath) {
-        this.cachePath = cachePath;
+        this(new JsonOnlineMarketCache(cachePath));
+    }
+
+    OnlineMarketClient(OnlineMarketCache cache) {
+        this.cache = cache;
         loadCache();
     }
 
@@ -56,8 +52,8 @@ final class OnlineMarketClient {
     synchronized void refreshIfDue(long now, OnlineMarketConfig config) {
         if (!config.enabled() || now < nextRefreshAt || refresh != null && !refresh.isDone()) return;
         nextRefreshAt = now + config.refreshSeconds() * 1000L;
-        refresh = fetch(0)
-                .thenAccept(next -> accept(next.snapshot(), next.endpoint()))
+        refresh = OnlineEndpointFailover.fetch(ENDPOINTS, this::fetch)
+                .thenAccept(next -> accept(next.value(), next.endpoint()))
                 .exceptionally(failure -> {
                     recordFailure(failure);
                     return null;
@@ -83,26 +79,17 @@ final class OnlineMarketClient {
     }
 
     synchronized List<OnlineMarketEvent> pollNewEvents() {
-        List<OnlineMarketEvent> events = new ArrayList<>(pendingEvents);
-        pendingEvents.clear();
-        return events;
+        return anomalyInbox.drain();
     }
 
-    private CompletableFuture<FetchedMarket> fetch(int endpointIndex) {
-        URI endpoint = ENDPOINTS.get(endpointIndex);
+    private CompletableFuture<OnlineMarketSnapshot> fetch(URI endpoint) {
         HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json")
                 .header("User-Agent", "ColonyBridge/" + ColonyBridgeConstants.VERSION)
                 .GET().build();
         return client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
                 .thenApply(OnlineMarketClient::responseBody)
-                .thenApply(OnlineMarketFeed::parse)
-                .thenApply(snapshot -> new FetchedMarket(endpoint, snapshot))
-                .handle((result, failure) -> {
-                    if (failure == null) return CompletableFuture.completedFuture(result);
-                    if (endpointIndex + 1 < ENDPOINTS.size()) return fetch(endpointIndex + 1);
-                    return CompletableFuture.<FetchedMarket>failedFuture(unwrap(failure));
-                }).thenCompose(Function.identity());
+                .thenApply(OnlineMarketFeed::parse);
     }
 
     private static String responseBody(HttpResponse<InputStream> response) {
@@ -117,19 +104,12 @@ final class OnlineMarketClient {
     }
 
     private synchronized void accept(OnlineMarketSnapshot next, URI endpoint) {
-        Set<String> previousIds = new HashSet<>();
-        if (snapshot != null) snapshot.events().forEach(event -> previousIds.add(event.id()));
-        for (OnlineMarketEvent event : next.events()) {
-            if (!previousIds.contains(event.id()) && pendingEvents.stream().noneMatch(pending -> pending.id().equals(event.id()))) {
-                pendingEvents.add(event);
-            }
-        }
+        anomalyInbox.accept(snapshot == null ? List.of() : snapshot.events(), next.events());
         snapshot = next;
         activeEndpoint = endpoint;
         lastFailure = null;
         try {
-            String json = com.colonybridge.utility.JsonSupport.toJson(next, true);
-            AtomicFileWriter.writeUtf8(cachePath, json);
+            cache.save(next);
         } catch (IOException failure) {
             ColonyBridge.LOGGER.debug("Royal Exchange online cache could not be saved.", failure);
         }
@@ -148,18 +128,10 @@ final class OnlineMarketClient {
     }
 
     private void loadCache() {
-        if (!Files.isRegularFile(cachePath)) return;
         try {
-            String json = Files.readString(cachePath, StandardCharsets.UTF_8);
-            OnlineMarketSnapshot cached = com.colonybridge.utility.JsonSupport.gson(false)
-                    .fromJson(json, OnlineMarketSnapshot.class);
-            if (cached != null && cached.changes() != null && cached.changes().keySet().containsAll(OnlineIssuerMapper.TICKERS)) {
-                snapshot = cached;
-            }
+            snapshot = cache.load();
         } catch (IOException | RuntimeException failure) {
             ColonyBridge.LOGGER.debug("Royal Exchange online cache could not be loaded.", failure);
         }
     }
-
-    private record FetchedMarket(URI endpoint, OnlineMarketSnapshot snapshot) {}
 }

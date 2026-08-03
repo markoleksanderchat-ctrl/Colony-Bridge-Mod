@@ -16,8 +16,6 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.*;
 
 public final class MarketManager {
@@ -25,6 +23,8 @@ public final class MarketManager {
 
     private final MinecraftServer server;
     private final Path persistencePath;
+    private final MarketClock clock;
+    private final MarketStateRepository repository;
     private final OnlineMarketClient onlineMarket;
     private final VanillaItemClassifier classifier = new VanillaItemClassifier();
     private long seed;
@@ -39,9 +39,11 @@ public final class MarketManager {
     private MarketManager(MinecraftServer server) {
         this.server = server;
         this.persistencePath = server.getWorldPath(LevelResource.ROOT).resolve("colonybridge").resolve("market.json");
+        this.clock = SystemMarketClock.INSTANCE;
+        this.repository = new JsonMarketStateRepository(persistencePath);
         this.onlineMarket = new OnlineMarketClient(persistencePath.resolveSibling("online-market-cache.json"));
         load();
-        onlineMarket.refreshIfDue(System.currentTimeMillis(), ColonyBridgeConfig.onlineMarketValues());
+        onlineMarket.refreshIfDue(clock.nowMillis(), ColonyBridgeConfig.onlineMarketValues());
     }
 
     public static synchronized MarketManager get(MinecraftServer server) {
@@ -58,31 +60,12 @@ public final class MarketManager {
     }
 
     public synchronized MarketQuote requestQuote(ServerPlayer player, Item item, int requestedQuantity, TradeDirection direction) {
-        int quantity = Math.max(1, Math.min(1024, requestedQuantity));
-        long now = System.currentTimeMillis();
+        long now = clock.nowMillis();
         MarketConfig config = ColonyBridgeConfig.marketValues();
         Valuation value = value(item, now, config);
-        double ratio = direction == TradeDirection.SELL ? config.sellPriceRatio() : 1.0;
-        double tradeUnit = value.currentUnit() * ratio;
-        if (tradeUnit < 1) quantity = Math.max(quantity, PriceCalculator.practicalItemsPerDiamond(tradeUnit));
-        double bulk = PriceCalculator.bulkModifier(quantity, value.classified().input().wholesaleSuitability());
-        double baseTotal = value.baseUnit() * ratio * quantity * bulk;
-        double currentTotal = tradeUnit * quantity * bulk;
-        int diamonds = Math.max(1, direction == TradeDirection.SELL ? (int) Math.floor(currentTotal) : (int) Math.round(currentTotal));
-        String condition = value.currentUnit() > value.baseUnit() * 1.08 ? "Demand is elevated"
-                : value.currentUnit() < value.baseUnit() * 0.92 ? "Supply is favorable" : "Market is steady";
-        String eventText = activeEvents.stream().filter(event -> event.affects(value.itemId(), value.classified().tags()) && event.strengthAt(now) > 0)
-                .map(MarketEvent::title).findFirst().map(title -> " Active influence: " + title + ".").orElse("");
-        String explanation = "Primary increase: " + value.classified().strongestIncrease() + "; primary restraint: "
-                + value.classified().strongestDecrease() + "." + eventText;
-        if (value.onlineInfluence() != null) {
-            explanation += " Online Exchange: " + value.onlineInfluence().summary() + ".";
-        }
-        long ready = now + config.quoteDelaySeconds() * 1000L;
-        double validityFactor = 1.25 - value.classified().volatility() * 0.5;
-        long expires = ready + Math.max(15_000L, Math.round(config.quoteValiditySeconds() * 1000L * validityFactor));
-        MarketQuote quote = new MarketQuote(UUID.randomUUID().toString(), player.getUUID().toString(), value.itemId(),
-                quantity, direction, baseTotal, currentTotal, diamonds, condition, explanation, now, ready, expires, false);
+        MarketQuote quote = QuoteLifecycleService.create(UUID.randomUUID().toString(), player.getUUID().toString(),
+                value.classified(), value.itemId(), requestedQuantity, direction, value.baseUnit(), value.currentUnit(),
+                value.onlineInfluence(), activeEvents, now, config);
         quotes.put(quote.id(), quote);
         discardExpired(now);
         save();
@@ -94,82 +77,71 @@ public final class MarketManager {
     }
 
     public synchronized PurchaseResult completeTrade(ServerPlayer player, String quoteId, String itemId, int quantity) {
-        long now = System.currentTimeMillis();
-        if (player.isCreative() || player.isSpectator()) {
-            return PurchaseResult.failure("Royal Exchange trades require Survival or Adventure mode.");
-        }
+        long now = clock.nowMillis();
+        PlayerInventoryPort inventory = new ServerPlayerInventoryAdapter(player);
         MarketQuote quote = quotes.get(quoteId);
-        if (completedQuoteIds.contains(quoteId) || quote != null && quote.completed()) return PurchaseResult.failure("That quote has already been completed.");
-        if (!QuoteManager.canComplete(quote, player.getUUID().toString(), itemId, quantity, now)) {
-            return PurchaseResult.failure(quote != null && quote.expired(now) ? "That quote has expired." : "That quote is no longer valid.");
-        }
         MarketConfig config = ColonyBridgeConfig.marketValues();
         Item item = resolveVanilla(itemId);
-        if (item == Items.AIR) return PurchaseResult.failure("That item is not available.");
-        if (quote.direction() == TradeDirection.BUY) {
-            if (!config.buyingEnabled()) return PurchaseResult.failure("Royal Exchange buying is disabled.");
-            if (!QuoteManager.canAfford(countDiamonds(player), quote.totalDiamondCost())) return PurchaseResult.failure("You do not have enough diamonds.");
-            removeDiamonds(player, quote.totalDiamondCost());
-            giveItems(player, item, quantity);
-        } else {
-            if (!config.sellingEnabled()) return PurchaseResult.failure("Royal Exchange selling is disabled.");
-            int remaining = remainingSellAllowance(player, config);
-            if (quote.totalDiamondCost() > remaining) return PurchaseResult.failure("Your daily Exchange limit has " + remaining + " diamonds remaining.");
-            if (countPlainItems(player, item) < quantity) return PurchaseResult.failure("You do not have enough unmodified items.");
-            removePlainItems(player, item, quantity);
-            giveItems(player, Items.DIAMOND, quote.totalDiamondCost());
-            recordSale(player, quote.totalDiamondCost());
-        }
-        quotes.put(quoteId, quote.completedCopy());
-        completedQuoteIds.add(quoteId);
-        records.computeIfPresent(itemId, (ignored, record) -> MarketDynamics.afterTrade(record, quote.direction(), quantity, now));
-        save();
-        return PurchaseResult.success(quote.direction() == TradeDirection.BUY
-                ? "Purchased for " + quote.totalDiamondCost() + " diamonds."
-                : "Sold for " + quote.totalDiamondCost() + " diamonds.");
+        int remaining = remainingSellAllowance(inventory.playerId(), config);
+        String validation = TradeExecutionService.validate(inventory, quote, completedQuoteIds.contains(quoteId),
+                itemId, quantity, now, config, item != Items.AIR, remaining);
+        if (validation != null) return PurchaseResult.failure(validation);
+        MarketState before = snapshotState();
+        MarketTransactionCoordinator.Result result = MarketTransactionCoordinator.execute(inventory,
+                TradeExecutionService.mutation(quote), () -> {
+                    quotes.put(quoteId, quote.completedCopy());
+                    completedQuoteIds.add(quoteId);
+                    records.computeIfPresent(itemId, (ignored, record) ->
+                            MarketDynamics.afterTrade(record, quote.direction(), quantity, now));
+                    if (quote.direction() == TradeDirection.SELL) recordSale(inventory.playerId(), quote.totalDiamondCost());
+                }, () -> restoreState(before), this::persistState,
+                quote.direction() == TradeDirection.BUY
+                        ? "Purchased for " + quote.totalDiamondCost() + " diamonds."
+                        : "Sold for " + quote.totalDiamondCost() + " diamonds.");
+        if (result.failure() != null) ColonyBridge.LOGGER.error("Royal Exchange trade was rolled back.", result.failure());
+        return new PurchaseResult(result.success(), result.message());
     }
 
     public synchronized List<MarketContract> contracts() {
-        ensureContracts(System.currentTimeMillis());
+        ensureContracts(clock.nowMillis());
         return contracts.values().stream().sorted(Comparator.comparing(MarketContract::id)).toList();
     }
 
     public synchronized PurchaseResult completeContract(ServerPlayer player, String contractId) {
-        if (player.isCreative() || player.isSpectator()) {
-            return PurchaseResult.failure("Royal contracts require Survival or Adventure mode.");
-        }
-        ensureContracts(System.currentTimeMillis());
+        long now = clock.nowMillis();
+        ensureContracts(now);
         MarketContract contract = contracts.get(contractId);
-        if (contract == null || completedContractIds.contains(contractId) || contract.expired(System.currentTimeMillis())) {
-            return PurchaseResult.failure("That contract is no longer available.");
-        }
-        Item item = resolveVanilla(contract.itemId());
-        if (item == Items.AIR || countPlainItems(player, item) < contract.quantity()) {
-            return PurchaseResult.failure("You do not have the required unmodified goods.");
-        }
-        removePlainItems(player, item, contract.quantity());
-        giveItems(player, Items.DIAMOND, contract.rewardDiamonds());
-        completedContractIds.add(contract.id());
-        contracts.remove(contract.id());
-        records.computeIfPresent(contract.itemId(), (ignored, record) -> MarketDynamics.afterTrade(record,
-                TradeDirection.SELL, contract.quantity(), System.currentTimeMillis()));
-        save();
-        return PurchaseResult.success("Contract fulfilled for " + contract.rewardDiamonds() + " diamonds.");
+        PlayerInventoryPort inventory = new ServerPlayerInventoryAdapter(player);
+        Item item = contract == null ? Items.AIR : resolveVanilla(contract.itemId());
+        String validation = ContractExecutionService.validate(inventory, contract,
+                completedContractIds.contains(contractId), now, item != Items.AIR);
+        if (validation != null) return PurchaseResult.failure(validation);
+        MarketState before = snapshotState();
+        MarketTransactionCoordinator.Result result = MarketTransactionCoordinator.execute(inventory,
+                ContractExecutionService.mutation(contract), () -> {
+                    completedContractIds.add(contract.id());
+                    contracts.remove(contract.id());
+                    records.computeIfPresent(contract.itemId(), (ignored, record) ->
+                            MarketDynamics.afterTrade(record, TradeDirection.SELL, contract.quantity(), now));
+                }, () -> restoreState(before), this::persistState,
+                "Contract fulfilled for " + contract.rewardDiamonds() + " diamonds.");
+        if (result.failure() != null) ColonyBridge.LOGGER.error("Royal Exchange contract was rolled back.", result.failure());
+        return new PurchaseResult(result.success(), result.message());
     }
 
     public synchronized int remainingSellAllowance(ServerPlayer player) {
-        return remainingSellAllowance(player, ColonyBridgeConfig.marketValues());
+        return remainingSellAllowance(player.getUUID().toString(), ColonyBridgeConfig.marketValues());
     }
 
     public synchronized List<MarketEvent> events() {
-        activeEvents = MarketEventManager.advance(activeEvents, seed, System.currentTimeMillis(),
+        activeEvents = MarketEventManager.advance(activeEvents, seed, clock.nowMillis(),
                 ColonyBridgeConfig.marketValues().eventFrequencyMinutes());
         return List.copyOf(activeEvents);
     }
 
     public synchronized MarketEvent forceEvent(String templateId) {
         MarketConfig config = ColonyBridgeConfig.marketValues();
-        MarketEvent event = MarketEventManager.force(templateId, seed, System.currentTimeMillis(), config.eventFrequencyMinutes() * 2);
+        MarketEvent event = MarketEventManager.force(templateId, seed, clock.nowMillis(), config.eventFrequencyMinutes() * 2);
         List<MarketEvent> next = new ArrayList<>(activeEvents);
         next.add(event);
         activeEvents = List.copyOf(next);
@@ -190,18 +162,19 @@ public final class MarketManager {
 
     public synchronized String onlineMarketStatus() {
         OnlineMarketConfig config = ColonyBridgeConfig.onlineMarketValues();
-        onlineMarket.refreshIfDue(System.currentTimeMillis(), config);
-        return onlineMarket.status(System.currentTimeMillis(), config);
+        long now = clock.nowMillis();
+        onlineMarket.refreshIfDue(now, config);
+        return onlineMarket.status(now, config);
     }
 
     public synchronized int onlineMarketState() {
         OnlineMarketConfig config = ColonyBridgeConfig.onlineMarketValues();
-        return onlineMarket.state(System.currentTimeMillis(), config);
+        return onlineMarket.state(clock.nowMillis(), config);
     }
 
     public synchronized void tickOnlineMarket() {
         OnlineMarketConfig config = ColonyBridgeConfig.onlineMarketValues();
-        onlineMarket.refreshIfDue(System.currentTimeMillis(), config);
+        onlineMarket.refreshIfDue(clock.nowMillis(), config);
         if (!config.enabled() || server.getPlayerList().getPlayerCount() == 0) return;
         for (OnlineMarketEvent event : onlineMarket.pollNewEvents()) {
             ChatFormatting severityColor = switch (event.severity()) {
@@ -266,7 +239,7 @@ public final class MarketManager {
 
     private void load() {
         try {
-            MarketState state = MarketPersistence.load(persistencePath);
+            MarketState state = repository.load();
             if (state == null) { seed = new SecureRandom().nextLong(); save(); return; }
             seed = state.seed();
             if (state.records() != null) records.putAll(state.records());
@@ -276,7 +249,7 @@ public final class MarketManager {
             if (state.completedContractIds() != null) completedContractIds.addAll(state.completedContractIds());
             if (state.dailySellVolumes() != null) dailySellVolumes.putAll(state.dailySellVolumes());
             activeEvents = state.activeEvents() == null ? List.of() : List.copyOf(state.activeEvents());
-            discardExpired(System.currentTimeMillis());
+            discardExpired(clock.nowMillis());
         } catch (IOException failure) {
             ColonyBridge.LOGGER.warn("Royal Exchange market data could not be loaded; a fresh market was created.", failure);
             seed = new SecureRandom().nextLong(); save();
@@ -285,10 +258,7 @@ public final class MarketManager {
 
     public synchronized void save() {
         try {
-            MarketPersistence.save(persistencePath, new MarketState(MarketState.CURRENT_VERSION, seed,
-                    Map.copyOf(records), List.copyOf(activeEvents), Map.copyOf(quotes), Set.copyOf(completedQuoteIds),
-                    ColonyBridgeConfig.marketValues(), Map.copyOf(contracts), Set.copyOf(completedContractIds),
-                    Map.copyOf(dailySellVolumes)));
+            persistState();
         } catch (IOException failure) {
             ColonyBridge.LOGGER.error("Royal Exchange market data could not be saved.", failure);
         }
@@ -298,23 +268,18 @@ public final class MarketManager {
         quotes.entrySet().removeIf(entry -> entry.getValue().expired(now - 86_400_000L));
         if (completedQuoteIds.size() > 4096) completedQuoteIds.clear();
         if (completedContractIds.size() > 4096) completedContractIds.clear();
-        long today = LocalDate.now(ZoneOffset.UTC).toEpochDay();
+        long today = clock.utcEpochDay();
         dailySellVolumes.entrySet().removeIf(entry -> entry.getValue().epochDay() < today - 1);
     }
 
-    private int remainingSellAllowance(ServerPlayer player, MarketConfig config) {
-        DailySellVolume volume = dailySellVolumes.get(player.getUUID().toString());
-        long today = LocalDate.now(ZoneOffset.UTC).toEpochDay();
-        int used = volume != null && volume.epochDay() == today ? volume.diamondsPaid() : 0;
-        return Math.max(0, config.dailySellDiamondLimit() - used);
+    private int remainingSellAllowance(String playerId, MarketConfig config) {
+        return MarketDomainOperations.remainingSellAllowance(dailySellVolumes.get(playerId),
+                clock.utcEpochDay(), config.dailySellDiamondLimit());
     }
 
-    private void recordSale(ServerPlayer player, int diamonds) {
-        String id = player.getUUID().toString();
-        long today = LocalDate.now(ZoneOffset.UTC).toEpochDay();
-        DailySellVolume old = dailySellVolumes.get(id);
-        int used = old != null && old.epochDay() == today ? old.diamondsPaid() : 0;
-        dailySellVolumes.put(id, new DailySellVolume(today, used + diamonds));
+    private void recordSale(String playerId, int diamonds) {
+        dailySellVolumes.put(playerId, MarketDomainOperations.recordSale(dailySellVolumes.get(playerId),
+                clock.utcEpochDay(), diamonds));
     }
 
     private static Item resolveVanilla(String itemId) {
@@ -323,57 +288,25 @@ public final class MarketManager {
         return BuiltInRegistries.ITEM.getOptional(key).orElse(Items.AIR);
     }
 
-    private static int countDiamonds(ServerPlayer player) {
-        int count = 0;
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (stack.is(Items.DIAMOND)) count += stack.getCount();
-        }
-        return count;
+    private MarketState snapshotState() {
+        return new MarketState(MarketState.CURRENT_VERSION, seed, Map.copyOf(records), List.copyOf(activeEvents),
+                Map.copyOf(quotes), Set.copyOf(completedQuoteIds), ColonyBridgeConfig.marketValues(),
+                Map.copyOf(contracts), Set.copyOf(completedContractIds), Map.copyOf(dailySellVolumes));
     }
 
-    private static int countPlainItems(ServerPlayer player, Item item) {
-        int count = 0;
-        ItemStack sample = new ItemStack(item);
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (ItemStack.isSameItemSameComponents(stack, sample)) count += stack.getCount();
-        }
-        return count;
+    private void persistState() throws IOException {
+        repository.save(snapshotState());
     }
 
-    private static void removeDiamonds(ServerPlayer player, int amount) {
-        int remaining = amount;
-        for (int slot = 0; slot < player.getInventory().getContainerSize() && remaining > 0; slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (!stack.is(Items.DIAMOND)) continue;
-            int removed = Math.min(remaining, stack.getCount());
-            stack.shrink(removed);
-            remaining -= removed;
-        }
-        player.getInventory().setChanged();
-    }
-
-    private static void removePlainItems(ServerPlayer player, Item item, int amount) {
-        int remaining = amount;
-        ItemStack sample = new ItemStack(item);
-        for (int slot = 0; slot < player.getInventory().getContainerSize() && remaining > 0; slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (!ItemStack.isSameItemSameComponents(stack, sample)) continue;
-            int removed = Math.min(remaining, stack.getCount());
-            stack.shrink(removed);
-            remaining -= removed;
-        }
-        player.getInventory().setChanged();
-    }
-
-    private static void giveItems(ServerPlayer player, Item item, int quantity) {
-        int remaining = quantity;
-        while (remaining > 0) {
-            ItemStack stack = new ItemStack(item, Math.min(remaining, item.getDefaultMaxStackSize()));
-            remaining -= stack.getCount();
-            if (!player.getInventory().add(stack)) player.drop(stack, false);
-        }
+    private void restoreState(MarketState state) {
+        seed = state.seed();
+        records.clear(); records.putAll(state.records());
+        activeEvents = List.copyOf(state.activeEvents());
+        quotes.clear(); quotes.putAll(state.quotes());
+        completedQuoteIds.clear(); completedQuoteIds.addAll(state.completedQuoteIds());
+        contracts.clear(); contracts.putAll(state.contracts());
+        completedContractIds.clear(); completedContractIds.addAll(state.completedContractIds());
+        dailySellVolumes.clear(); dailySellVolumes.putAll(state.dailySellVolumes());
     }
 
     private record Valuation(ClassifiedItem classified, String itemId, double baseUnit, double currentUnit,

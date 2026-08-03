@@ -1,0 +1,58 @@
+{
+  "pricing": {
+    "intrinsicValue": 40.34743848528945,
+    "rawDiamondValue": 0.6141162630942077,
+    "minimumValue": 0.5834104499394973,
+    "maximumValue": 0.6448220762489182,
+    "classification": "Valuable resource"
+  },
+  "itemClassification": {
+    "itemId": "minecraft:iron_ingot",
+    "tags": ["#bulk", "#mineral"],
+    "rarity": 2.0,
+    "labor": 1.2,
+    "equipmentGate": 2.0,
+    "wholesaleSuitability": 1.0,
+    "volatility": 0.18,
+    "restraint": "bulk availability"
+  },
+  "quote": {
+    "id": "fixture-quote",
+    "playerId": "fixture-player",
+    "itemId": "minecraft:test",
+    "requestedQuantity": 16,
+    "quantity": 16,
+    "basePrice": 7.376,
+    "currentPrice": 8.8512,
+    "diamonds": 9,
+    "condition": "Demand is elevated",
+    "createdAt": 1700000000000,
+    "readyAt": 1700000003000,
+    "expiresAt": 1700000135000
+  },
+  "event": {
+    "strengthAtStart": 1.0,
+    "strengthAtHalf": 0.5,
+    "strengthAtEnd": 0.0
+  },
+  "contract": {
+    "seed": 42,
+    "bucket": 100,
+    "index": 0,
+    "itemId": "minecraft:oak_log",
+    "quantity": 128
+  },
+  "dailyLimit": {
+    "epochDay": 21000,
+    "limit": 64,
+    "alreadyPaid": 23,
+    "remaining": 41,
+    "nextSale": 7,
+    "afterSale": 30
+  },
+  "onlineInfluence": {
+    "changePercent": 4.5,
+    "multiplier": 1.045,
+    "ticker": "IRON"
+  }
+}
