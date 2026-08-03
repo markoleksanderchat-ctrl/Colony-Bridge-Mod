@@ -30,7 +30,7 @@ final class BridgeBehaviorTests {
 
     private static Map<Class<?>, List<String>> behaviors() {
         Map<Class<?>, List<String>> tests = new LinkedHashMap<>();
-        tests.put(TestRunner.class, List.of(
+        tests.put(CoreLogicBehaviorTests.class, List.of(
                 "sanitizesUnsafeNames", "validatesMinimums", "ignoresTimestampAndTrigger",
                 "ignoresVolatileObservations", "serializesNullsAndSchemaVersion",
                 "writesLatestAndAvoidsDuplicateHistory", "appliesRetentionToDuplicateSnapshots",

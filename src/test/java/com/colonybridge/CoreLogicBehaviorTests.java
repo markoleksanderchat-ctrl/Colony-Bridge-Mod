@@ -16,33 +16,8 @@ import com.google.gson.JsonParser;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public final class TestRunner {
-    private TestRunner() {
-    }
-
-    public static void main(String[] args) throws Exception {
-        sanitizesUnsafeNames();
-        validatesMinimums();
-        ignoresTimestampAndTrigger();
-        ignoresVolatileObservations();
-        serializesNullsAndSchemaVersion();
-        writesLatestAndAvoidsDuplicateHistory();
-        appliesRetentionToDuplicateSnapshots();
-        repairsMalformedLatestSnapshot();
-        estimatesTerritoryFromTicketedChunks();
-        announcesOnlyNewDays();
-        rotatesDayCelebrations();
-        estimatesFoodRunway();
-        matchesBuilderHutProgress();
-        refreshesStockEveryTwoColonyDays();
-        com.colonybridge.minecolonies.collection.CollectionArchitectureTests.run();
-        com.colonybridge.utility.DefenseStatisticsCalculatorTests.run();
-        com.colonybridge.utility.SnapshotSummaryCalculatorTests.run();
-        com.colonybridge.export.ExportPipelineTests.run();
-        com.colonybridge.bootstrap.Phase5ArchitectureTests.run();
-        com.colonybridge.market.MarketLogicTests.run();
-        com.colonybridge.market.Phase6MarketArchitectureTests.run();
-        System.out.println("Colony Bridge logic tests passed.");
+final class CoreLogicBehaviorTests {
+    private CoreLogicBehaviorTests() {
     }
 
     private static void matchesBuilderHutProgress() {

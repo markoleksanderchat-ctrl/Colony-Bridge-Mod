@@ -107,13 +107,6 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(['-Xlint:all', '-Xlint:-processing'])
 }
 
-tasks.register('runLogicTests', JavaExec) {
-    group = 'verification'
-    description = 'Runs dependency-free Colony Bridge logic tests.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.colonybridge.TestRunner'
-}
-
 tasks.register('exportContractFixtures', JavaExec) {
     group = 'verification'
     description = 'Serializes canonical contract fixtures from the real Java snapshot models.'
@@ -154,7 +147,6 @@ tasks.register('verifyVersionMetadata') {
 }
 
 tasks.named('test').configure {
-    dependsOn tasks.named('runLogicTests')
     dependsOn tasks.named('verifyVersionMetadata')
     useJUnitPlatform()
 }
