@@ -82,6 +82,9 @@ def localModJar = { pattern ->
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
     testImplementation 'com.electronwill.night-config:toml:3.8.3'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     compileOnly files(localModJar(/minecolonies-1\.1\.1319-1\.21\.1\.jar/))
     compileOnly files(localModJar(/structurize-.*\.jar/))
@@ -153,7 +156,7 @@ tasks.register('verifyVersionMetadata') {
 tasks.named('test').configure {
     dependsOn tasks.named('runLogicTests')
     dependsOn tasks.named('verifyVersionMetadata')
-    failOnNoDiscoveredTests = false
+    useJUnitPlatform()
 }
 
 tasks.named('processResources', ProcessResources).configure {
