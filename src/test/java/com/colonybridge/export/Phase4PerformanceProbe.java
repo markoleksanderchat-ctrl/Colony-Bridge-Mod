@@ -24,8 +24,8 @@ public final class Phase4PerformanceProbe {
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("Expected measurement output path.");
         JsonArray fixtures = new JsonArray();
-        fixtures.add(measure("normal", Path.of("../../contracts/snapshot/v2/fixtures/normal.json")));
-        fixtures.add(measure("maximum-bounded", Path.of("../../contracts/snapshot/v2/fixtures/maximum-bounded.json")));
+        fixtures.add(measure("normal", "/performance/normal.json"));
+        fixtures.add(measure("maximum-bounded", "/performance/maximum-bounded.json"));
 
         JsonObject report = new JsonObject();
         report.addProperty("measuredAt", Instant.now().toString());
@@ -44,8 +44,13 @@ public final class Phase4PerformanceProbe {
         System.out.println("Phase 4 performance evidence: " + output);
     }
 
-    private static JsonObject measure(String name, Path fixturePath) throws Exception {
-        ColonySnapshot source = JsonSupport.gson(false).fromJson(Files.readString(fixturePath), ColonySnapshot.class);
+    private static JsonObject measure(String name, String fixtureResource) throws Exception {
+        byte[] fixtureBytes;
+        try (var input = Phase4PerformanceProbe.class.getResourceAsStream(fixtureResource)) {
+            if (input == null) throw new IllegalStateException("Missing performance fixture: " + fixtureResource);
+            fixtureBytes = input.readAllBytes();
+        }
+        ColonySnapshot source = JsonSupport.gson(false).fromJson(new String(fixtureBytes, StandardCharsets.UTF_8), ColonySnapshot.class);
         List<Long> serialization = new ArrayList<>();
         List<Long> fingerprint = new ArrayList<>();
         List<Long> disk = new ArrayList<>();
@@ -71,7 +76,7 @@ public final class Phase4PerformanceProbe {
         }
         JsonObject result = new JsonObject();
         result.addProperty("name", name);
-        result.addProperty("sourceBytes", Files.size(fixturePath));
+        result.addProperty("sourceBytes", fixtureBytes.length);
         result.addProperty("compactOutputBytes", outputBytes);
         result.addProperty("serializationMedianMicros", micros(median(serialization)));
         result.addProperty("fingerprintMedianMicros", micros(median(fingerprint)));

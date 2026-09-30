@@ -23,6 +23,18 @@ It does not parse MineColonies NBT as its main data source or write to MineColon
 
 Development dependencies are pinned by filename and SHA-256 in `dev-dependencies.json`. Supply those JARs in `dev-mods/`, or set `COLONYBRIDGE_DEV_MODS_DIR` / `-Pcolonybridge.devModsDir=<directory>`. The build never selects a JAR by modification time or reads a personal game instance by default.
 
+## Building from source
+
+This repository contains Colony Bridge and its in-game Royal Exchange. The online exchange website and Kingdom Chronicle are maintained separately.
+
+Use Java 21 and the included Gradle wrapper. Obtain the exact dependency JARs listed in `dev-dependencies.json` and place them in `dev-mods/`, or supply their directory:
+
+```powershell
+.\gradlew.bat '-Pcolonybridge.devModsDir=C:\path\to\locked-dependencies' test build --no-daemon
+```
+
+On Linux or macOS, use `./gradlew` with the same tasks and property. Add `--offline` when Gradle and Maven dependencies are already cached. The resulting JAR is written to `build/libs/`; building does not install it. `measurePhase4` and `measurePhase12` use bundled synthetic test fixtures and do not require a Minecraft world or the companion project.
+
 ## Installation
 
 1. Build the project with `gradlew build`.

@@ -6,3 +6,12 @@ out/
 libs/
 dev-mods/
 !libs/.gitkeep
+
+# Local credentials and scratch files
+.env*
+.dev.vars*
+*.pem
+*.key
+*.p12
+*.pfx
+/.tmp/

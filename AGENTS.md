@@ -1,3 +1,11 @@
+# Colony Bridge repository
+
+- Preserve protocol `com.colonybridge.snapshot`, schema `2`, layout `1`, filesystem transport and read-only snapshot export.
+- Minecraft may read the public Royal Exchange feed but must never write gameplay or market state back to it.
+- Keep the mod independently buildable with Java 21 and the SHA-256 locked dependencies in `dev-dependencies.json`.
+- Preserve working behavior and user changes. Run the relevant tests after code changes; keep credentials, saves, local development JARs and generated builds outside Git.
+- Do not upload, publish a release, replace an installed JAR or touch Minecraft saves without the user's explicit instruction.
+
 # Royal Exchange UI
 
 - Read `docs/ROYAL_EXCHANGE_NATIVE_UI.md` before changing the in-game visuals.
