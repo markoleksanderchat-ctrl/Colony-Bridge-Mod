@@ -189,19 +189,9 @@ Play Minecraft
 -> Next export is compared with the previous snapshot
 ```
 
-## Build From Source
+## Dependency Packaging
 
-```text
-gradlew build
-```
-
-The build expects local development MineColonies dependency JARs in:
-
-```text
-C:\Users\marko\curseforge\minecraft\Instances\Create Adventures\mods
-```
-
-The produced bridge JAR does not bundle MineColonies or its dependencies.
+The produced bridge JAR does not bundle MineColonies or its dependencies. Supply the pinned development dependencies as described in Building from source above.
 
 ## Development Client / Server
 
