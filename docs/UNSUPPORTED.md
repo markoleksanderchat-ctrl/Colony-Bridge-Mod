@@ -8,4 +8,4 @@
 - Pathfinding traces, route quality, and citizen AI decision history.
 - Maps, town rendering, automatic colony control, or save modification.
 
-Unsupported features are explicit in each snapshot under `capabilities`; the bridge does not guess values.
+Snapshots list unsupported features under `capabilities`. Missing values are not guessed.

@@ -2,9 +2,9 @@
 
 Schema version: `2`
 
-Colony Bridge emits neutral JSON snapshots rather than serialized MineColonies Java objects. Unknown values are `null`, not fabricated defaults.
+Colony Bridge saves colony data as JSON. Unknown values are `null`; missing data is not replaced with guessed values.
 
-Top-level shape:
+Snapshot structure:
 
 ```json
 {
@@ -45,7 +45,7 @@ Schema 2 adds environment, claimed-territory, research, statistics, richer citiz
 
 `stockLedger` is an additive schema 2 field. The bridge deduplicates known colony building item handlers, scans at most 512 handlers and 16,384 slots, and refreshes the cache every two MineColonies colony days. `refreshedColonyDay`, `nextRefreshColonyDay`, and `cacheAgeDays` expose freshness. Up to 512 item types are exported; `omittedItemTypes` and `truncated` report incomplete display or scan coverage.
 
-`foodSupply` reads the selected menus from the colony's Restaurant or Dining Hall modules, then cross-references them against the cached stock ledger. `approvedMenuItems`, `menuApprovedFoodTypes`, and `diningHallsScanned` make the filter auditable. `averageMealsPerDay` uses up to seven completed MineColonies colony days, and `estimatedDaysRemaining` assumes no new food is added. Because it reuses the performance-safe ledger, stored-food counts can be up to two colony days old. A `null` estimate with `status: "learning"` means there is not yet enough observed consumption; `no_dining_hall` and `menu_empty` explain missing menu configuration without inventing a reserve. When `truncated` is true, the status is `incomplete`, confidence is `low`, and runout estimates are null until a complete scan is available.
+`foodSupply` reads the selected menus from the colony's Restaurant or Dining Hall modules, then cross-references them against the cached stock ledger. `approvedMenuItems`, `menuApprovedFoodTypes`, and `diningHallsScanned` show which menus were checked. `averageMealsPerDay` uses up to seven completed MineColonies colony days, and `estimatedDaysRemaining` assumes no new food is added. Because it uses the cached stock ledger, stored-food counts can be up to two colony days old. A `null` estimate with `status: "learning"` means there is not yet enough observed consumption; `no_dining_hall` and `menu_empty` explain missing menu configuration when food reserves cannot be estimated. When `truncated` is true, the status is `incomplete`, confidence is `low`, and runout estimates are null until a complete scan is available.
 
 Snapshots are written to:
 

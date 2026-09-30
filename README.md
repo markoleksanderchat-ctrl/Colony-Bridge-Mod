@@ -1,39 +1,37 @@
 # Colony Bridge
 
-Colony Bridge is a NeoForge mod for Minecraft Java 1.21.1 that exports MineColonies colony state as read-only local JSON snapshots and provides the optional Royal Exchange trade market.
+Colony Bridge is a NeoForge mod for Minecraft 1.21.1. It saves MineColonies colony data as JSON for dashboards such as Kingdom Chronicle and adds the Royal Exchange, an in-game market for buying and selling goods with diamonds.
 
-It is the local data source for external read-only dashboards such as Kingdom Chronicle. It does not add an inbound HTTP API, WebSocket server, worker assignment, AI advisor, or save editor.
+Colony exports are read-only. Royal Exchange trades use your inventory and do not change MineColonies colony data.
 
-## Safety
+## Data and privacy
 
-Snapshot export remains read-only with respect to Minecraft and MineColonies gameplay data. The Royal Exchange never edits MineColonies data; its server-authoritative trades intentionally exchange player inventory goods and diamonds. Bridge-owned JSON is written only under:
+Colony exports are saved under `<minecraft instance>/colonybridge/`. Exporting reads colony data without changing MineColonies saves.
 
-```text
-<minecraft instance>/colonybridge/
-```
+The Royal Exchange reads prices from the online exchange. It does not send gameplay or trade data back. If the feed becomes unavailable or too old, the mod returns to local pricing.
 
-It does not parse MineColonies NBT as its main data source or write to MineColonies save folders. The Royal Exchange reads the public online market by HTTPS GET and applies its issuer movements one-way to local prices; no Minecraft data is sent to the market. If the feed is unavailable or stale, cached data expires and local pricing continues safely. Remote snapshot sync remains disabled by default. When explicitly configured, it sends only a sanitized snapshot by authenticated HTTPS PUT to the configured endpoint; the mod never opens a port and has no telemetry, analytics, or background bug detector.
+Remote snapshot sync is off by default. If you enable it, the mod sends a copy with identifying and location data removed to your configured HTTPS endpoint. It does not send the complete local snapshot, open an inbound port, or collect telemetry.
 
 ## Supported Versions
 
 - Minecraft: `1.21.1`
 - Loader: NeoForge `21.1.x`
 - MineColonies target: `1.1.1319-1.21.1`
-- Designed to tolerate newer 1.21.1 MineColonies builds when the inspected API remains compatible.
-
-Development dependencies are pinned by filename and SHA-256 in `dev-dependencies.json`. Supply those JARs in `dev-mods/`, or set `COLONYBRIDGE_DEV_MODS_DIR` / `-Pcolonybridge.devModsDir=<directory>`. The build never selects a JAR by modification time or reads a personal game instance by default.
+- Newer MineColonies builds for Minecraft 1.21.1 may work, but compatibility depends on API changes.
 
 ## Building from source
 
-This repository contains Colony Bridge and its in-game Royal Exchange. The online exchange website and Kingdom Chronicle are maintained separately.
-
-Use Java 21 and the included Gradle wrapper. Obtain the exact dependency JARs listed in `dev-dependencies.json` and place them in `dev-mods/`, or supply their directory:
+Use Java 21 and the included Gradle wrapper. Required development JARs and their SHA-256 checksums are listed in `dev-dependencies.json`. Put those JARs in `dev-mods/`, set `COLONYBRIDGE_DEV_MODS_DIR`, or pass `-Pcolonybridge.devModsDir=<directory>`.
 
 ```powershell
 .\gradlew.bat '-Pcolonybridge.devModsDir=C:\path\to\locked-dependencies' test build --no-daemon
 ```
 
-On Linux or macOS, use `./gradlew` with the same tasks and property. Add `--offline` when Gradle and Maven dependencies are already cached. The resulting JAR is written to `build/libs/`; building does not install it. `measurePhase4` and `measurePhase12` use bundled synthetic test fixtures and do not require a Minecraft world or the companion project.
+On Linux or macOS, use `./gradlew`. Add `--offline` if the required Gradle and Maven dependencies are already cached. The built JAR is saved in `build/libs/`. MineColonies and its dependencies are installed separately and are not bundled in the JAR.
+
+The `measurePhase4` and `measurePhase12` tasks use sample data included in this repository. They do not need a Minecraft world or Kingdom Chronicle.
+
+This repository contains the mod and its in-game Royal Exchange. The online exchange and Kingdom Chronicle are separate projects.
 
 ## Installation
 
@@ -64,11 +62,11 @@ Commands never alter colony state.
 
 ## Royal Exchange
 
-Craft the Royal Exchange with a lectern in the center, an emerald above it, and copper ingots in every other slot. Its Buy and Sell tabs provide delayed live quotes for vanilla goods. The Contracts tab posts rotating premium Crown orders. Prices use the `royal_exchange_v1` valuation formula, broad registry-derived categories, deterministic trends, trade pressure, and decaying lore events. Only requested and contracted goods are simulated.
+Craft the Royal Exchange with a lectern in the center, an emerald above it, and copper ingots in the remaining slots. Use Buy and Sell to trade vanilla goods for diamonds. Contracts offer rotating Crown orders with extra rewards. Quotes take a short time to arrive and expire if you leave them too long.
 
-Base values are game-balance estimates from item traits, recipe complexity, and a small set of fixed anchors; they are not measured player-market prices. Local trends update in 30-minute periods, active events modify them, and fresh online issuer movements can apply a further bounded multiplier. Long idle gaps catch up in one bounded pass. Bulk buy discounts cannot reduce the per-item price below the configured sell ratio, and completed contract IDs are pruned as contract periods rotate.
+Prices use the `royal_exchange_v1` formula. They reflect item traits, crafting complexity, fixed base values, local trends, trade activity and market events. These are gameplay prices, not measurements of player trading. Local trends update every 30 minutes. Fresh online market movements can also adjust prices within set limits. Only requested items and contract goods are simulated. After a long break, the market catches up in a single update. Bulk discounts cannot reduce the unit price below the configured sell ratio. Old contract completion records are removed as contract periods change.
 
-Trades are executed on the server. It verifies the item, quantity, player, timing, completion state, payment, daily sale allowance, game mode, and exact default item components. Damaged, enchanted, renamed, or otherwise modified goods cannot be sold or submitted to contracts. Modded item namespaces are rejected, and inventory-changing trades require Survival or Adventure mode.
+The server checks each trade before changing your inventory, including the item, quantity, player, quote timing, completion state, payment, daily sale limit and game mode. Selling and contract deliveries accept only unmodified vanilla items: damaged, enchanted, renamed and modded goods are excluded. Trades require Survival or Adventure mode.
 
 In integrated single-player worlds, the commands are available without enabling cheats. On dedicated servers they still require operator permission.
 
@@ -151,7 +149,7 @@ colonybridge/
       2026-07-10T01-22-35Z.json
 ```
 
-`latest` is updated on every export. Historical snapshots are skipped when the meaningful colony payload fingerprint has not changed.
+The latest file is updated on every export. A historical snapshot is saved only when the colony data has changed.
 
 ## JSON Schema
 
@@ -179,19 +177,11 @@ See [docs/SCHEMA.md](docs/SCHEMA.md). Snapshots include:
 
 Unknown values are `null`. Unsupported features are marked in `capabilities` instead of being guessed.
 
-## Live Dashboard Workflow
+## Using a dashboard
 
-```text
-Play Minecraft
--> Colony Bridge exports the colony state
--> Colony Bridge uploads a sanitized copy when remote sync is enabled
--> Kingdom Chronicle shows how the colony was left
--> Next export is compared with the previous snapshot
-```
+Colony Bridge exports data while you play. A local dashboard can read those files directly. If remote sync is enabled, Kingdom Chronicle can use the uploaded copy to show the colony's latest state.
 
-## Dependency Packaging
 
-The produced bridge JAR does not bundle MineColonies or its dependencies. Supply the pinned development dependencies as described in Building from source above.
 
 ## Development Client / Server
 
@@ -221,19 +211,19 @@ For manual verification, compare world and MineColonies save timestamps before a
 
 ## Troubleshooting
 
-- If no files appear, run `/colonybridge status`.
-- If MineColonies is missing or incompatible, the adapter reports unavailable and exports no fabricated data.
-- If a field fails for one citizen/building/request, the snapshot includes a scoped error and continues.
-- If `/cb status` reports remote sync as misconfigured, verify that the endpoint is HTTPS and that both endpoint and token are present.
-- For troubleshooting, provide `bridge-info.json`, the latest snapshot JSON, and the normal NeoForge log around the export. Do not share a whole world save unless you intend to.
+- No export files? Run `/colonybridge status`.
+- If MineColonies is missing or incompatible, the status explains why colony data is unavailable.
+- If part of an export fails, the snapshot includes an error for that part and keeps the data it could read.
+- For remote sync errors, check that the endpoint uses HTTPS and that an endpoint and token are configured.
+- When reporting a problem, include `bridge-info.json`, the relevant export and the NeoForge log around the failure. Check for private data before sharing files; a full world save is usually unnecessary.
 
-## Audit fixes (unreleased)
+## Upcoming fixes
 
-- Diamond currency, diamond blocks and diamond ores cannot be quoted or traded as goods. Diamond equipment remains available.
-- Trades require enough inventory space for the entire reward. A full inventory cancels and rolls back the trade; rewards are never dropped after persistence.
-- Quotes are transient: one current offer per player, at most 1,024 total, replaced on a new request and discarded on restart. Completed trades remain durable.
-- The Exchange screen displays synchronized failure reasons. Exact transaction results also appear in chat. Client and server must use the same updated mod build (the menu adds a result-code slot).
-- World changes reset collection caches and export diagnostics. Failed inventory/menu reads remain explicitly degraded instead of appearing complete and empty.
-- Citizen position opt-out includes bed, home and status locations. Remote uploads strip territory coordinates, alias livestock hut references, and redact diagnostic location details.
-- Anomaly announcements are bounded, expire, and do not repeat within their retained lifetime. Closed market clients reject late completions.
-- Snapshot schema 2, layout 1 and one-way online influence remain unchanged. Gameplay verification of world switching, full inventories and multiplayer presentation is still required before release.
+- Diamonds, diamond blocks and diamond ores cannot be traded as goods. Diamond equipment can still be traded.
+- Trades need room for the full reward. If your inventory is full, the trade is cancelled and rolled back instead of dropping items.
+- Each player can have one active quote, with up to 1,024 quotes across all players. New quotes replace old ones, and quotes are cleared on restart. Completed trades remain saved.
+- The Exchange screen and chat show trade failures. Client and server must use the same updated mod build because the menu includes an extra result-code slot.
+- Switching worlds clears collection caches and export status. Failed inventory or menu reads are reported as incomplete.
+- Disabling citizen positions also removes bed, home and status locations. Remote uploads remove territory coordinates, hide livestock hut references and remove locations from error details.
+- Market announcements expire, have a storage limit and do not repeat while retained. Closing a market client prevents late responses from being applied.
+- Snapshot schema 2, layout 1 and the one-way online feed are unchanged. World switching, full inventories and multiplayer still need in-game testing before release.

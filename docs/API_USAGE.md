@@ -1,8 +1,8 @@
 # MineColonies API Usage
 
-The implementation concentrates MineColonies imports in `com.colonybridge.minecolonies`.
+MineColonies API calls are kept in `com.colonybridge.minecolonies`.
 
-Actually used API surfaces:
+APIs used by the mod:
 
 - `IColonyManager.getInstance().getAllColonies()`
 - `IColony` identity, name, dimension, center, permissions, active/attack/state/happiness methods

@@ -1,10 +1,10 @@
 # Royal Exchange appearance
 
-The Royal Exchange uses a **client-only** NeoForge config. After the updated mod is installed and Minecraft starts once, edit:
+Change Royal Exchange colors and text positions in the client config. Start Minecraft once to create the file:
 
-`<Create Adventures>/config/colonybridge-royal-exchange-client.toml`
+`<minecraft instance>/config/colonybridge-royal-exchange-client.toml`
 
-The installed **Configured** mod can also show these settings under **Mods → Colony Bridge → Config → Royal Exchange client config**. This uses the standard NeoForge client config; it does not change prices, trades, or the server config.
+If Configured is installed, open Mods -> Colony Bridge -> Config -> Royal Exchange client config. These settings affect appearance only; prices, trades and server settings stay the same.
 
 Do not use **Create's config menu** to save Colony Bridge settings. The bundled Ponder config screen can crash while saving a changed string in Colony Bridge's server config, even when you are editing the Contracts category. For Royal Exchange appearance, use Configured or edit the client TOML above while Minecraft is closed. For gameplay settings such as contract count, duration, or premium, edit the world's `serverconfig/colonybridge-server.toml` while Minecraft is closed. Keep the remote sync token private; Create's crash report may include it if this bug occurs.
 

@@ -1,14 +1,13 @@
-# Unreleased audit fixes
-
-- Restore current Royal Exchange feed support with a bounded 2 MiB response and truthful cached-feed status/recovery diagnostics.
-- Avoid forcing unloaded hut chunks during inventory export; retry incomplete scans and retain complete cached totals. Add inventory-stage timings.
-
-- Guard JEI screen-opening queries until dimensions exist and snapshot dimensions for resize detection.
-- Use singular diamond wording for one-diamond purchases, sales and contracts.
-
-Trading conservation and rollback, session isolation, privacy, degraded scans, synchronized errors, bounded quotes and notices, persistence validation, shared lookups/defaults, scan indexes, deterministic dependency lock, translation resources and regression coverage.
-
 # Changelog
+
+## Unreleased
+
+- Restore the Royal Exchange feed with support for responses up to 2 MiB and clearer connection and cache status.
+- Skip inventory scans in unloaded hut chunks. Retry incomplete scans, keep the last complete totals, and record scan times.
+- Prevent JEI from checking the screen before its dimensions are ready, and detect when the screen is resized.
+- Use diamond instead of diamonds when a purchase, sale or contract involves one diamond.
+
+- Improve trade rollback, session handling, privacy, incomplete-scan reporting, error messages, quote and notice limits, saved-data checks, shared defaults, scan indexes, pinned dependencies, translations and regression tests.
 
 ## 0.29.4
 
