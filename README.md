@@ -4,6 +4,8 @@ Colony Bridge is a NeoForge mod for Minecraft 1.21.1. It saves MineColonies colo
 
 Colony exports are read-only. Royal Exchange trades use your inventory and do not change MineColonies colony data.
 
+Download the JAR from the [current release](https://github.com/markoleksanderchat-ctrl/Colony-Bridge-Mod/releases/latest).
+
 ## Data and privacy
 
 Colony exports are saved under `<minecraft instance>/colonybridge/`. Exporting reads colony data without changing MineColonies saves.
@@ -35,11 +37,12 @@ This repository contains the mod and its in-game Royal Exchange. The online exch
 
 ## Installation
 
-1. Build the project with `gradlew build`.
-2. Copy the JAR matching `mod_version` in `gradle.properties` from `build/libs/` into your Minecraft instance `mods` folder.
-3. Launch Minecraft with NeoForge and MineColonies installed.
-4. Start or load a world containing MineColonies.
-5. Check `<instance>/colonybridge/bridge-info.json` and `<instance>/colonybridge/latest/`.
+1. Use Minecraft 1.21.1 with NeoForge 21.1.x.
+2. Install MineColonies and its matching dependencies: Structurize, BlockUI, Domum Ornamentum and Multi-Piston. See the [MineColonies installation guide](https://minecolonies.com/wiki/installation/manual/).
+3. Download the Colony Bridge JAR from the [current release](https://github.com/markoleksanderchat-ctrl/Colony-Bridge-Mod/releases/latest) and put it in your instance's `mods` folder. Keep only one Colony Bridge JAR installed.
+4. Launch Minecraft and open a MineColonies world. Run `/cb status` to check the mod, or craft the Royal Exchange to use the market.
+
+JEI is optional. Create and Kingdom Chronicle are not required. To compile your own JAR, follow Building from source above.
 
 ## Commands
 
