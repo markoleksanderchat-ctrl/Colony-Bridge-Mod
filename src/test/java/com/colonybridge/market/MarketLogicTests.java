@@ -167,6 +167,9 @@ public final class MarketLogicTests {
         require(first.equals(second), "contract rotation must be deterministic");
         require(MarketItemIds.isVanilla(first.itemId()) && first.quantity() > 0,
                 "contract templates must request positive vanilla goods");
+        Set<String> completed = new java.util.HashSet<>(Set.of("contract-100-0", "contract-99-1"));
+        require(RoyalContractManager.pruneCompleted(completed, 100), "old contract IDs should be pruned");
+        require(completed.equals(Set.of("contract-100-0")), "current contract IDs must prevent duplicate payouts");
     }
 
     private static void validatesTraderRecipeFormat() throws Exception {

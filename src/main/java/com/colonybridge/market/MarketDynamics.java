@@ -9,13 +9,20 @@ public final class MarketDynamics {
     private MarketDynamics() {
     }
 
+    public static MarketRecord rebase(MarketRecord source, double baseValue, double volatility) {
+        if (source.baseValue() == baseValue && source.volatility() == volatility) return source;
+        return new MarketRecord(source.itemId(), baseValue, volatility, source.currentTrend(),
+                source.lastUpdateTime(), List.of(baseValue));
+    }
+
     public static MarketRecord advance(MarketRecord source, long seed, long now, double strength,
                                        double eventModifier, double minimum, double maximum) {
         long elapsed = Math.max(0, now - source.lastUpdateTime());
-        long periods = Math.min(96, elapsed / TREND_PERIOD_MILLIS);
-        double trend = source.currentTrend();
+        long periods = elapsed / TREND_PERIOD_MILLIS;
+        long skipped = Math.max(0, periods - 96);
+        double trend = source.currentTrend() * Math.pow(0.88, skipped);
         long basePeriod = Math.floorDiv(source.lastUpdateTime(), TREND_PERIOD_MILLIS);
-        for (long step = 1; step <= periods; step++) {
+        for (long step = skipped + 1; step <= periods; step++) {
             int mixed = MarketEventManager.mix(seed ^ source.itemId().hashCode() ^ (basePeriod + step));
             double impulse = ((mixed & 0xffff) / 32767.5) - 1;
             trend = trend * 0.88 + impulse * source.volatility() * strength * 0.12;

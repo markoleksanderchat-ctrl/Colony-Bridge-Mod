@@ -174,15 +174,15 @@ public final class Phase6MarketArchitectureTests {
         requireEquals(second, fetched.endpoint(), "endpoint failover result");
         requireEquals("ok", fetched.value(), "endpoint failover value");
         requireThrows(() -> OnlineMarketFeed.parse("{}"), "malformed feed rejection");
-        requireEquals(512_000, OnlineMarketClient.MAX_RESPONSE_BYTES, "online response size bound");
+        requireEquals(2 * 1024 * 1024, OnlineMarketResponse.MAX_BYTES, "online response size bound");
 
         OnlineAnomalyInbox inbox = new OnlineAnomalyInbox();
         OnlineMarketEvent event = new OnlineMarketEvent("rxa-fixture", "Fixture", "Fixture", "material", "onset",
                 List.of("IRON"), 2, 1_000, 2_000);
         inbox.accept(List.of(), List.of(event));
         inbox.accept(List.of(), List.of(event));
-        requireEquals(List.of(event), inbox.drain(), "anomaly delivery is deduplicated");
-        require(inbox.drain().isEmpty(), "anomaly delivery drains once");
+        requireEquals(List.of(event), inbox.drain(event.startedAtEpochMillis()), "anomaly delivery is deduplicated");
+        require(inbox.drain(event.startedAtEpochMillis()).isEmpty(), "anomaly delivery drains once");
 
         OnlineMarketCache brokenCache = new OnlineMarketCache() {
             @Override public OnlineMarketSnapshot load() throws IOException { throw new IOException("broken cache"); }
@@ -215,7 +215,8 @@ public final class Phase6MarketArchitectureTests {
                 RoyalExchangeMenu.REQUEST_QUOTE, RoyalExchangeMenu.COMPLETE_TRADE, RoyalExchangeMenu.BUY_MODE,
                 RoyalExchangeMenu.SELL_MODE, RoyalExchangeMenu.CONTRACTS_VIEW, RoyalExchangeMenu.PREV_CONTRACT,
                 RoyalExchangeMenu.NEXT_CONTRACT, RoyalExchangeMenu.COMPLETE_CONTRACT), "menu button ids");
-        requireEquals(19, RoyalExchangeMenu.DATA_COUNT, "menu data slot count");
+        requireEquals(94, RoyalExchangeMenu.DATA_CONTRACT_ROWS, "contract rows append after existing slots");
+        requireEquals(119, RoyalExchangeMenu.DATA_COUNT, "menu data slot count including bounded contract page");
         requireEquals(0, RoyalExchangeMenu.DATA_SELECTED_ITEM, "first data slot");
         requireEquals(18, RoyalExchangeMenu.DATA_ONLINE_STATE, "last data slot");
         require(RoyalExchangeLayout.WIDTH <= RoyalExchangeLayout.MINIMUM_SCALED_WIDTH
@@ -235,7 +236,7 @@ public final class Phase6MarketArchitectureTests {
         String jei = Files.readString(Path.of("src/main/java/com/colonybridge/market/trader/RoyalExchangeJeiPlugin.java"));
         require(screen.contains("search.isFocused()") && screen.contains("GLFW.GLFW_KEY_ESCAPE")
                 && screen.contains("search.setFocused(false)"), "search focus and Escape handling");
-        require(jei.contains("guiLeft() { return 0; }") && jei.contains("guiXSize() { return screen.screenWidthPixels(); }"),
+        require(jei.contains("guiLeft() { return 0; }") && jei.contains("guiXSize() { return screenWidth; }"),
                 "JEI overlay suppression remains full-screen");
         require(menu.contains("manager.requestQuote(serverPlayer, selected")
                 && menu.contains("manager.completeTrade(serverPlayer, activeQuote.id(),")

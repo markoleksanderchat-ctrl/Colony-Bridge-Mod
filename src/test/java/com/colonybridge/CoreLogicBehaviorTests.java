@@ -176,6 +176,13 @@ final class CoreLogicBehaviorTests {
         requireEquals("stable", stable.status(), "stable food status");
         requireEquals("high", stable.confidence(), "high confidence after a full sample");
 
+        var incomplete = FoodRunwayAnalyzer.analyze(84, 3, java.util.Map.of("minecraft:bread", 84),
+                4, 70, 7, 42, 15, 1, 3, java.util.List.of("minecraft:bread"), 2, 36, true);
+        require(incomplete.estimatedDaysRemaining() == null, "incomplete stock must not produce a runway");
+        require(incomplete.estimatedRunoutColonyDay() == null, "incomplete stock must not predict a runout day");
+        requireEquals("incomplete", incomplete.status(), "incomplete stock status");
+        requireEquals("low", incomplete.confidence(), "incomplete stock confidence");
+
         var learning = FoodRunwayAnalyzer.analyze(20, 1, java.util.Map.of("minecraft:apple", 20),
                 0, 0, 1, 1, 4, 1, 1, java.util.List.of("minecraft:apple"), 1, 8, false);
         require(learning.estimatedDaysRemaining() == null, "zero-meal sample should remain in learning state");

@@ -62,9 +62,12 @@ public final class CitizenBuildingCollector {
         Map<String, Object> details = new TreeMap<>();
         details.put("paused", CollectionSupport.safe(citizen::isPaused, null));
         details.put("needsBetterFood", CollectionSupport.safe(citizen::needsBetterFood, null));
-        details.put("bedPosition", CollectionSupport.pos(CollectionSupport.safe(citizen::getBedPos, null)));
-        details.put("statusPosition", CollectionSupport.pos(CollectionSupport.safe(citizen::getStatusPosition, null)));
-        details.put("homePosition", CollectionSupport.pos(CollectionSupport.safe(citizen::getHomePosition, null)));
+        details.put("bedPosition", context.config().includeCitizenPositions()
+                ? CollectionSupport.pos(CollectionSupport.safe(citizen::getBedPos, null)) : null);
+        details.put("statusPosition", context.config().includeCitizenPositions()
+                ? CollectionSupport.pos(CollectionSupport.safe(citizen::getStatusPosition, null)) : null);
+        details.put("homePosition", context.config().includeCitizenPositions()
+                ? CollectionSupport.pos(CollectionSupport.safe(citizen::getHomePosition, null)) : null);
         details.put("jobStatus", CollectionSupport.safe(() -> CollectionSupport.stringValue(citizen.getJobStatus()), null));
         details.put("jobNameTagDescription", job == null ? null : CollectionSupport.safe(job::getNameTagDescription, null));
         details.put("jobActionsDone", job == null ? null : CollectionSupport.safe(job::getActionsDone, null));
@@ -98,10 +101,16 @@ public final class CitizenBuildingCollector {
 
     private List<BuildingData> collectBuildings(ColonyCollectionContext context, List<CitizenData> citizens) {
         List<BuildingData> result = new ArrayList<>();
+        Map<String, List<Integer>> workersByBuilding = new HashMap<>();
+        for (CitizenData citizen : citizens) {
+            if (citizen.workplaceBuildingId() != null && citizen.id() != null)
+                workersByBuilding.computeIfAbsent(citizen.workplaceBuildingId(), ignored -> new ArrayList<>()).add(citizen.id());
+        }
+        workersByBuilding.values().forEach(workers -> workers.sort(Integer::compareTo));
         for (ICommonBuilding common : context.buildings()) {
             try {
                 result.add(buildingData(context, common,
-                        context.buildingAccess().getOrDefault(common, CollectionSupport.EMPTY_BUILDING_ACCESS), citizens));
+                        context.buildingAccess().getOrDefault(common, CollectionSupport.EMPTY_BUILDING_ACCESS), workersByBuilding));
             } catch (Exception exception) {
                 context.errors().add(CollectionSupport.error("building", "unknown", "FIELD_READ_FAILED", exception));
             }
@@ -111,12 +120,10 @@ public final class CitizenBuildingCollector {
     }
 
     private BuildingData buildingData(ColonyCollectionContext context, ICommonBuilding common,
-                                      CollectionSupport.BuildingAccess access, List<CitizenData> citizens) {
+                                      CollectionSupport.BuildingAccess access, Map<String, List<Integer>> workersByBuilding) {
         IBuilding building = common instanceof IBuilding typed ? typed : null;
         String id = CollectionSupport.buildingId(common);
-        List<Integer> workplaceWorkers = citizens.stream()
-                .filter(citizen -> Objects.equals(citizen.workplaceBuildingId(), id))
-                .map(CitizenData::id).filter(Objects::nonNull).sorted().toList();
+        List<Integer> workplaceWorkers = List.copyOf(workersByBuilding.getOrDefault(id, List.of()));
         Set<String> requestIds = new TreeSet<>();
         if (building != null) {
             for (List<Object> open : access.openRequestsByCitizen().values()) {

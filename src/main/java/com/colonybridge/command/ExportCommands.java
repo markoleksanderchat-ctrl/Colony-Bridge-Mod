@@ -37,7 +37,7 @@ final class ExportCommands {
                         source.sendFailure(Component.literal("Colony Bridge export failed: " + errorMessage(error)));
                     } else {
                         source.sendSuccess(() -> Component.literal("Colony Bridge exported "
-                                + status.coloniesDetected() + " colonies."), false);
+                                + status.coloniesDetected() + (status.coloniesDetected() == 1 ? " colony." : " colonies.")), false);
                     }
                 }));
         return 1;

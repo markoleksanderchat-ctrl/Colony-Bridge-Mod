@@ -17,6 +17,8 @@ import java.util.*;
 public final class LivestockCollector {
     private final LivestockObservationCache cache = new LivestockObservationCache();
 
+    public void clear() { cache.clear(); }
+
     public Result collect(ColonyCollectionContext context) {
         context.requireServerThread();
         if (context.trigger() == ExportTrigger.DISCONNECT || context.trigger() == ExportTrigger.SHUTDOWN) {

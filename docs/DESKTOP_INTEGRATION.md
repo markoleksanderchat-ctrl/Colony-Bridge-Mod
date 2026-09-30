@@ -1,6 +1,6 @@
 # Desktop Integration Contract
 
-Colony Bridge 0.18.0 provides the stable, read-only boundary used by the offline Windows application.
+Colony Bridge schema 2 provides the stable, read-only boundary used by the offline Windows application.
 
 ## Discovery
 

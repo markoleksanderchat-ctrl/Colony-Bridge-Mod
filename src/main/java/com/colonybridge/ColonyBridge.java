@@ -3,6 +3,7 @@ package com.colonybridge;
 import com.colonybridge.bootstrap.ServerLifecycleCoordinator;
 import com.colonybridge.command.ColonyBridgeCommand;
 import com.colonybridge.config.ColonyBridgeConfig;
+import com.colonybridge.config.RoyalExchangeUiConfig;
 import com.colonybridge.export.ColonyBridgeExporter;
 import com.colonybridge.market.trader.MarketRegistries;
 import com.colonybridge.minecolonies.MineColoniesAdapterFactory;
@@ -29,6 +30,8 @@ public final class ColonyBridge {
 
     public ColonyBridge(IEventBus modEventBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, ColonyBridgeConfig.SERVER_SPEC);
+        container.registerConfig(ModConfig.Type.CLIENT, RoyalExchangeUiConfig.CLIENT_SPEC,
+                "colonybridge-royal-exchange-client.toml");
         MarketRegistries.register(modEventBus);
         modEventBus.addListener(MarketRegistries::addCreativeTabContents);
         exporter = new ColonyBridgeExporter(LOGGER, MineColoniesAdapterFactory.create());

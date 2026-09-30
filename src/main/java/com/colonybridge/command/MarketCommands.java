@@ -13,6 +13,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 
+import java.io.IOException;
+
 final class MarketCommands {
     private MarketCommands() {
     }
@@ -76,6 +78,9 @@ final class MarketCommands {
         } catch (IllegalArgumentException invalid) {
             source.sendFailure(Component.literal(invalid.getMessage()));
             return 0;
+        } catch (IOException failure) {
+            source.sendFailure(Component.literal("Market event could not be saved; no event was started."));
+            return 0;
         }
     }
 
@@ -84,9 +89,14 @@ final class MarketCommands {
             source.sendFailure(Component.literal("Royal Exchange operator controls are disabled."));
             return 0;
         }
-        MarketManager.get(source.getServer()).reset();
-        source.sendSuccess(() -> Component.literal("Royal Exchange market reset with a new deterministic seed."), true);
-        return 1;
+        try {
+            MarketManager.get(source.getServer()).reset();
+            source.sendSuccess(() -> Component.literal("Royal Exchange market reset with a new deterministic seed."), true);
+            return 1;
+        } catch (IOException failure) {
+            source.sendFailure(Component.literal("Royal Exchange market could not be saved; the reset was cancelled."));
+            return 0;
+        }
     }
 
     private static int quote(CommandSourceStack source, String itemId, int quantity) {
@@ -96,8 +106,8 @@ final class MarketCommands {
         }
         ResourceLocation key = ResourceLocation.tryParse(itemId.contains(":") ? itemId : "minecraft:" + itemId);
         var item = key == null ? Items.AIR : BuiltInRegistries.ITEM.getOptional(key).orElse(Items.AIR);
-        if (item == Items.AIR || key == null || !"minecraft".equals(key.getNamespace())) {
-            source.sendFailure(Component.literal("Only vanilla minecraft: items may be quoted."));
+        if (item == Items.AIR || key == null || !com.colonybridge.market.MarketItemIds.isTradable(key.toString())) {
+            source.sendFailure(Component.literal("Only vanilla goods other than diamond currency, blocks and ores may be quoted."));
             return 0;
         }
         var quote = MarketManager.get(source.getServer()).requestQuote(source.getPlayer(), item, quantity);

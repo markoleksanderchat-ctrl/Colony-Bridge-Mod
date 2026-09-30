@@ -15,6 +15,8 @@ final class BoundedDurationSamples {
         this.capacity = capacity;
     }
 
+    synchronized void clear() { samples.clear(); }
+
     synchronized void add(long milliseconds) {
         if (milliseconds < 0) throw new IllegalArgumentException("duration must not be negative");
         if (samples.size() == capacity) samples.removeFirst();

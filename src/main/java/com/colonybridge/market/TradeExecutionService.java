@@ -12,6 +12,7 @@ public final class TradeExecutionService {
         if (!QuoteManager.canComplete(quote, inventory.playerId(), itemId, quantity, now)) {
             return quote != null && quote.expired(now) ? "That quote has expired." : "That quote is no longer valid.";
         }
+        if (!MarketItemIds.isTradable(itemId)) return "Currency cannot be traded as goods.";
         if (!itemAvailable) return "That item is not available.";
         if (quote.direction() == TradeDirection.BUY) {
             if (!config.buyingEnabled()) return "Royal Exchange buying is disabled.";
@@ -29,6 +30,7 @@ public final class TradeExecutionService {
     }
 
     public static InventoryMutation mutation(MarketQuote quote) {
+        if (!MarketItemIds.isTradable(quote.itemId())) throw new IllegalArgumentException("Currency cannot be traded as goods.");
         return quote.direction() == TradeDirection.BUY
                 ? new InventoryMutation("minecraft:diamond", quote.totalDiamondCost(), quote.itemId(), quote.quantity())
                 : new InventoryMutation(quote.itemId(), quote.quantity(), "minecraft:diamond", quote.totalDiamondCost());

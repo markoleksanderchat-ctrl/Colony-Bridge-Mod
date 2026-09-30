@@ -54,6 +54,13 @@ public final class ColonyBridgeExporter {
 
     public synchronized void start() {
         if (accepting && ioExecutor != null && !ioExecutor.isShutdown()) return;
+        adapter.resetSession();
+        collectionSamples.clear();
+        lastCollectionProfile = CollectionProfile.EMPTY;
+        lastSuccessfulTrigger = null;
+        coalescedAutomaticExports = 0;
+        status = new ExportStatus(adapter.status().available(), adapter.status().mineColoniesVersion(), 0,
+                null, null, 0, null, adapter.status().adapterName(), 0, 0, List.of());
         ioExecutor = Executors.newSingleThreadExecutor(task -> daemonThread(task, "colonybridge-io"));
         remoteQueue = new RemotePublishQueue();
         accepting = true;
@@ -328,6 +335,7 @@ public final class ColonyBridgeExporter {
                 activeExport = null;
             }
             stores.clear();
+            adapter.resetSession();
         }
     }
 

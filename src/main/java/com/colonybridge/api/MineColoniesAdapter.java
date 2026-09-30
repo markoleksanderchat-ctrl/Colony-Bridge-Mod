@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface MineColoniesAdapter {
     AdapterStatus status();
 
+    default void resetSession() { }
+
     default CollectionProfile lastCollectionProfile() {
         return CollectionProfile.EMPTY;
     }

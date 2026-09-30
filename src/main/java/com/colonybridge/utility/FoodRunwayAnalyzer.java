@@ -29,7 +29,7 @@ public final class FoodRunwayAnalyzer {
                 ? round((double) mealsServedSample / sampleDays)
                 : null;
         boolean menuReady = diningHallsScanned > 0 && menuApprovedFoodTypes > 0;
-        Double estimatedDaysRemaining = !menuReady || averageMealsPerDay == null || averageMealsPerDay <= 0
+        Double estimatedDaysRemaining = truncated || !menuReady || averageMealsPerDay == null || averageMealsPerDay <= 0
                 ? null
                 : round(storedServings / averageMealsPerDay);
         Integer estimatedRunoutColonyDay = estimatedDaysRemaining == null || currentColonyDay == null
@@ -41,6 +41,8 @@ public final class FoodRunwayAnalyzer {
             status = "no_dining_hall";
         } else if (menuApprovedFoodTypes == 0) {
             status = "menu_empty";
+        } else if (truncated) {
+            status = "incomplete";
         } else if (averageMealsPerDay == null) {
             status = "learning";
         } else if (estimatedDaysRemaining < 1) {
@@ -54,7 +56,7 @@ public final class FoodRunwayAnalyzer {
         }
 
         String confidence;
-        if (sampleDays < 2 || mealsServedSample < Math.max(5, citizenCount)) {
+        if (truncated || sampleDays < 2 || mealsServedSample < Math.max(5, citizenCount)) {
             confidence = "low";
         } else if (sampleDays < 5 || mealsServedSample < Math.max(15, citizenCount * 2)) {
             confidence = "medium";

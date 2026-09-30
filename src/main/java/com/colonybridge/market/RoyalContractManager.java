@@ -1,6 +1,7 @@
 package com.colonybridge.market;
 
 import java.util.List;
+import java.util.Set;
 
 public final class RoyalContractManager {
     private static final List<ContractTemplate> TEMPLATES = List.of(
@@ -24,6 +25,10 @@ public final class RoyalContractManager {
     public static ContractTemplate template(long seed, long bucket, int index) {
         int mixed = MarketEventManager.mix(seed ^ bucket ^ ((long) index * 0x9e3779b97f4a7c15L));
         return TEMPLATES.get(Math.floorMod(mixed, TEMPLATES.size()));
+    }
+
+    static boolean pruneCompleted(Set<String> completedIds, long currentBucket) {
+        return completedIds.removeIf(id -> !id.startsWith("contract-" + currentBucket + "-"));
     }
 
     public record ContractTemplate(String itemId, int quantity, String title, String description) {

@@ -40,6 +40,15 @@ public final class MineColonies121Adapter implements MineColoniesAdapter {
     }
 
     @Override
+    public void resetSession() {
+        inventoryCollector.clear();
+        defenseCollector.clear();
+        environmentTerritoryCollector.beginCollection();
+        livestockCollector.clear();
+        lastCollectionProfile = CollectionProfile.EMPTY;
+    }
+
+    @Override
     public AdapterStatus status() {
         return status;
     }
@@ -52,6 +61,7 @@ public final class MineColonies121Adapter implements MineColoniesAdapter {
     @Override
     public List<ColonySnapshot> collectAll(ServerLevelContext levelContext, BridgeConfigValues config,
                                            ExportTrigger trigger, Instant generatedAt) {
+        environmentTerritoryCollector.beginCollection();
         long started = System.nanoTime();
         List<IColony> colonies = IColonyManager.getInstance().getAllColonies().stream()
                 .sorted(Comparator.comparingInt(IColony::getID)).toList();
@@ -69,6 +79,7 @@ public final class MineColonies121Adapter implements MineColoniesAdapter {
     @Override
     public Optional<ColonySnapshot> collectById(ServerLevelContext levelContext, BridgeConfigValues config,
                                                 int colonyId, ExportTrigger trigger, Instant generatedAt) {
+        environmentTerritoryCollector.beginCollection();
         long started = System.nanoTime();
         for (IColony colony : IColonyManager.getInstance().getAllColonies()) {
             if (colony.getID() != colonyId) continue;
@@ -100,6 +111,7 @@ public final class MineColonies121Adapter implements MineColoniesAdapter {
         DefenseCollector.Result defenseResult = measure(stages, "defense", () -> defenseCollector.collect(context, research.statistics()));
         DefenseStatisticsData defense = defenseResult.data();
         InventoryFoodStockCollector.Result inventory = measure(stages, "inventoryFoodStock", () -> inventoryCollector.collect(context, summary.citizenCount()));
+        stages.putAll(inventoryCollector.timings());
         WorldData world = measure(stages, "worldMetadata", () -> metadataCollector.world(context));
 
         ColonySnapshot snapshot = measure(stages, "assembly", () -> assembler.assemble(context, gameData, new CollectedSections(

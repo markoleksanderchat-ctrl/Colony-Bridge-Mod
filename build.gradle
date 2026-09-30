@@ -5,6 +5,7 @@ plugins {
 
 version = providers.gradleProperty('mod_version').get()
 group = 'com.colonybridge'
+def buildVersion = version.toString()
 
 base {
     archivesName = 'colonybridge'
@@ -20,7 +21,7 @@ def generatedMetadataDir = layout.buildDirectory.dir('generated/sources/metadata
 sourceSets.main.java.srcDir(generatedMetadataDir)
 
 tasks.register('generateBuildMetadata') {
-    inputs.property('modVersion', project.version)
+    inputs.property('modVersion', buildVersion)
     outputs.dir(generatedMetadataDir)
     doLast {
         def output = generatedMetadataDir.get().file('com/colonybridge/ColonyBridgeConstants.java').asFile
@@ -30,7 +31,7 @@ tasks.register('generateBuildMetadata') {
 public final class ColonyBridgeConstants {
     public static final String MOD_ID = \"colonybridge\";
     public static final String MOD_NAME = \"Colony Bridge\";
-    public static final String VERSION = \"${project.version}\";
+    public static final String VERSION = \"${buildVersion}\";
     public static final String PROTOCOL_ID = \"com.colonybridge.snapshot\";
     public static final int SCHEMA_VERSION = 2;
     public static final int OUTPUT_LAYOUT_VERSION = 1;
@@ -68,15 +69,26 @@ neoForge {
 
 def instanceModsPath = providers.gradleProperty('colonybridge.devModsDir')
         .orElse(providers.environmentVariable('COLONYBRIDGE_DEV_MODS_DIR'))
-        .orElse('C:/Users/marko/curseforge/minecraft/Instances/Create Adventures/mods')
+        .orElse('dev-mods')
         .get()
 def instanceMods = file(instanceModsPath)
+def dependencyLock = new groovy.json.JsonSlurper().parse(file('dev-dependencies.json'))
+def verifiedJars = [:]
 def localModJar = { pattern ->
-    def matches = instanceMods.exists() ? instanceMods.listFiles().findAll { it.name ==~ pattern } : []
-    if (matches.isEmpty()) {
-        throw new GradleException("Required local development mod JAR not found in ${instanceMods}: ${pattern}")
+    def names = dependencyLock.keySet().findAll { it ==~ pattern }
+    if (names.size() != 1) throw new GradleException("Dependency lock must contain exactly one match for ${pattern}")
+    def name = names.first()
+    if (verifiedJars.containsKey(name)) return verifiedJars[name]
+    def jar = new File(instanceMods, name)
+    if (!jar.isFile()) throw new GradleException("Missing locked dependency ${name}. Set colonybridge.devModsDir or COLONYBRIDGE_DEV_MODS_DIR to your dependency directory.")
+    def digest = java.security.MessageDigest.getInstance('SHA-256')
+    jar.withInputStream { input ->
+        input.transferTo(new java.security.DigestOutputStream(java.io.OutputStream.nullOutputStream(), digest))
     }
-    matches.sort { -it.lastModified() }.first()
+    if (java.util.HexFormat.of().formatHex(digest.digest()) != dependencyLock[name])
+        throw new GradleException("Dependency checksum mismatch: ${name}")
+    verifiedJars[name] = jar
+    jar
 }
 
 dependencies {
@@ -84,7 +96,9 @@ dependencies {
     testImplementation 'com.electronwill.night-config:toml:3.8.3'
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation files(localModJar(/jei-1\.21\.1-neoforge-.*\.jar/))
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.slf4j:slf4j-api:2.0.9'
 
     compileOnly files(localModJar(/minecolonies-1\.1\.1319-1\.21\.1\.jar/))
     compileOnly files(localModJar(/structurize-.*\.jar/))
@@ -145,7 +159,7 @@ tasks.register('verifyVersionMetadata') {
     description = 'Verifies Gradle, generated Java metadata, and the expanded mod manifest agree.'
     dependsOn tasks.named('generateBuildMetadata'), tasks.named('processResources')
     doLast {
-        def expected = project.version.toString()
+        def expected = buildVersion
         def generated = generatedMetadataDir.get().file('com/colonybridge/ColonyBridgeConstants.java').asFile.text
         def manifest = layout.buildDirectory.file('resources/main/META-INF/neoforge.mods.toml').get().asFile.text
         if (!generated.contains("VERSION = \"${expected}\"")) {

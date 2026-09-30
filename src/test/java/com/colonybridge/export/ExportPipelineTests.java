@@ -158,6 +158,8 @@ public final class ExportPipelineTests {
                 "Retry-After seconds should be respected");
         require(RemoteSnapshotPublisher.retryDelayMillis(java.util.Optional.of("60"), 1) == 5_000L,
                 "server retry delays must be capped to keep exports responsive");
+        require(RemoteSnapshotPublisher.retryDelayMillis(java.util.Optional.of(Long.toString(Long.MAX_VALUE)), 1) == 5_000L,
+                "large Retry-After values must not overflow the bounded delay");
         require(RemoteSnapshotPublisher.retryDelayMillis(java.util.Optional.of("invalid"), 2) == 500L,
                 "invalid Retry-After values should fall back safely");
     }

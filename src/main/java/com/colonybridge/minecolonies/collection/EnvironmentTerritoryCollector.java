@@ -9,6 +9,20 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.*;
 
 public final class EnvironmentTerritoryCollector {
+    private final Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, Map<Integer, List<ChunkPos>>> claimIndexes = new HashMap<>();
+    public void beginCollection() { claimIndexes.clear(); }
+
+    private Map<Integer, List<ChunkPos>> indexClaims(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension) {
+        Map<Integer, List<ChunkPos>> result = new HashMap<>();
+        for (var entry : IColonyManager.getInstance().getClaimData(dimension).entrySet()) {
+            Set<Integer> owners = new HashSet<>(entry.getValue().getStaticClaimColonies());
+            owners.add(entry.getValue().getOwningColony());
+            for (int owner : owners) result.computeIfAbsent(owner, ignored -> new ArrayList<>()).add(entry.getKey());
+        }
+        result.values().forEach(claims -> claims.sort(Comparator.comparingInt((ChunkPos pos) -> pos.x).thenComparingInt(pos -> pos.z)));
+        return result;
+    }
+
     public EnvironmentData environment(ColonyCollectionContext context, List<BuildingData> buildings) {
         context.requireServerThread();
         ServerLevel level = context.levelContext().server().getLevel(context.colony().getDimension());
@@ -29,12 +43,8 @@ public final class EnvironmentTerritoryCollector {
         context.requireServerThread();
         List<ChunkPos> claims;
         try {
-            claims = IColonyManager.getInstance().getClaimData(context.colony().getDimension()).entrySet().stream()
-                    .filter(entry -> entry.getValue().getOwningColony() == context.colony().getID()
-                            || entry.getValue().getStaticClaimColonies().contains(context.colony().getID()))
-                    .map(Map.Entry::getKey)
-                    .sorted(Comparator.comparingInt((ChunkPos position) -> position.x).thenComparingInt(position -> position.z))
-                    .toList();
+            claims = claimIndexes.computeIfAbsent(context.colony().getDimension(), this::indexClaims)
+                    .getOrDefault(context.colony().getID(), List.of());
         } catch (RuntimeException exception) {
             claims = List.of();
             context.warnings().add(CollectionSupport.error("territory", context.colonyId(), "CLAIM_MAP_READ_FAILED", exception));

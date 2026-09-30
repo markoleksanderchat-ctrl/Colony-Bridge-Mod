@@ -1,6 +1,5 @@
 package com.colonybridge.market;
 
-import com.colonybridge.ColonyBridge;
 import com.colonybridge.ColonyBridgeConstants;
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,7 +7,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
@@ -17,10 +15,10 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 final class OnlineMarketClient {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(OnlineMarketClient.class);
     static final List<URI> ENDPOINTS = List.of(
             URI.create("https://royalexchange.net/api/market"),
             URI.create("https://royal-exchange-online.royal-exchange-market.workers.dev/api/market"));
-    static final int MAX_RESPONSE_BYTES = 512_000;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
 
@@ -30,8 +28,10 @@ final class OnlineMarketClient {
     private OnlineMarketSnapshot snapshot;
     private CompletableFuture<Void> refresh;
     private long nextRefreshAt;
+    private boolean closed;
     private String lastFailure;
     private URI activeEndpoint;
+    private long lastSuccessfulFetchAt;
     private final OnlineAnomalyInbox anomalyInbox = new OnlineAnomalyInbox();
 
     OnlineMarketClient(Path cachePath) {
@@ -50,7 +50,7 @@ final class OnlineMarketClient {
     }
 
     synchronized void refreshIfDue(long now, OnlineMarketConfig config) {
-        if (!config.enabled() || now < nextRefreshAt || refresh != null && !refresh.isDone()) return;
+        if (closed || !config.enabled() || now < nextRefreshAt || refresh != null && !refresh.isDone()) return;
         nextRefreshAt = now + config.refreshSeconds() * 1000L;
         refresh = OnlineEndpointFailover.fetch(ENDPOINTS, this::fetch)
                 .thenAccept(next -> accept(next.value(), next.endpoint()))
@@ -62,19 +62,24 @@ final class OnlineMarketClient {
 
     synchronized String status(long now, OnlineMarketConfig config) {
         if (!config.enabled()) return "disabled";
+        String detail = snapshot == null ? "" : "; feed age "
+                + Math.max(0, (now - snapshot.asOfEpochMillis()) / 60_000L) + "m";
+        if (lastSuccessfulFetchAt > 0) detail += "; last fetch "
+                + Math.max(0, (now - lastSuccessfulFetchAt) / 1000L) + "s ago";
+        if (lastFailure != null) detail += "; " + lastFailure;
         if (snapshot != null && snapshot.usable(now, config)) {
-            long ageMinutes = Math.max(0, (now - snapshot.asOfEpochMillis()) / 60_000L);
-            String host = activeEndpoint == null ? "cached feed" : activeEndpoint.getHost();
-            return "connected via " + host + " (market age " + ageMinutes + "m)";
+            return (lastFailure == null && activeEndpoint != null
+                    ? "connected via " + activeEndpoint.getHost() : "cached pricing (offline)") + detail;
         }
-        if (snapshot != null) return "offline (cached market is stale)";
-        return lastFailure == null ? "connecting" : "offline (local pricing active)";
+        return (snapshot != null ? "local pricing (cached feed stale)"
+                : lastFailure == null ? "connecting" : "local pricing (offline)") + detail;
     }
 
     synchronized int state(long now, OnlineMarketConfig config) {
         if (!config.enabled()) return -1;
         refreshIfDue(now, config);
-        if (snapshot != null && snapshot.usable(now, config)) return 2;
+        if (snapshot != null && snapshot.usable(now, config))
+            return lastFailure == null && activeEndpoint != null ? 2 : 3;
         return snapshot == null && lastFailure == null ? 1 : 0;
     }
 
@@ -95,43 +100,55 @@ final class OnlineMarketClient {
     private static String responseBody(HttpResponse<InputStream> response) {
         try (InputStream body = response.body()) {
             if (response.statusCode() != 200) throw new IOException("Online market returned HTTP " + response.statusCode() + ".");
-            byte[] bytes = body.readNBytes(MAX_RESPONSE_BYTES + 1);
-            if (bytes.length > MAX_RESPONSE_BYTES) throw new IOException("Online market response is too large.");
-            return new String(bytes, StandardCharsets.UTF_8);
+            return OnlineMarketResponse.read(body);
         } catch (IOException failure) {
             throw new java.io.UncheckedIOException(failure);
         }
     }
 
-    private synchronized void accept(OnlineMarketSnapshot next, URI endpoint) {
+    synchronized void accept(OnlineMarketSnapshot next, URI endpoint) {
+        if (closed || snapshot != null && next.asOfEpochMillis() < snapshot.asOfEpochMillis()) return;
         anomalyInbox.accept(snapshot == null ? List.of() : snapshot.events(), next.events());
         snapshot = next;
         activeEndpoint = endpoint;
+        lastSuccessfulFetchAt = System.currentTimeMillis();
+        if (lastFailure != null) LOGGER.info("Royal Exchange online feed recovered via {}.", endpoint.getHost());
         lastFailure = null;
         try {
             cache.save(next);
         } catch (IOException failure) {
-            ColonyBridge.LOGGER.debug("Royal Exchange online cache could not be saved.", failure);
+            LOGGER.debug("Royal Exchange online cache could not be saved.", failure);
         }
     }
 
-    private synchronized void recordFailure(Throwable failure) {
+    synchronized void close() {
+        closed = true;
+        if (refresh != null) refresh.cancel(true);
+        client.shutdownNow();
+        anomalyInbox.clear();
+    }
+
+    synchronized void recordFailure(Throwable failure) {
+        if (closed) return;
         Throwable cause = unwrap(failure);
         String message = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
-        if (!message.equals(lastFailure)) ColonyBridge.LOGGER.warn("Royal Exchange online prices are unavailable; local pricing remains active: {}", message);
+        if (!message.equals(lastFailure)) LOGGER.warn("Royal Exchange refresh failed; cached pricing is used only while fresh, otherwise local pricing applies: {}", message);
         lastFailure = message;
     }
 
     private static Throwable unwrap(Throwable failure) {
-        return failure instanceof java.util.concurrent.CompletionException && failure.getCause() != null
-                ? failure.getCause() : failure;
+        while ((failure instanceof java.util.concurrent.CompletionException
+                || failure instanceof java.io.UncheckedIOException) && failure.getCause() != null) {
+            failure = failure.getCause();
+        }
+        return failure;
     }
 
     private void loadCache() {
         try {
             snapshot = cache.load();
         } catch (IOException | RuntimeException failure) {
-            ColonyBridge.LOGGER.debug("Royal Exchange online cache could not be loaded.", failure);
+            LOGGER.debug("Royal Exchange online cache could not be loaded.", failure);
         }
     }
 }

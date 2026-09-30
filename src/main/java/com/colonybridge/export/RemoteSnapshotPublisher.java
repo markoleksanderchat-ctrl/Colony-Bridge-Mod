@@ -83,7 +83,7 @@ final class RemoteSnapshotPublisher {
         if (retryAfter.isPresent()) {
             try {
                 long seconds = Long.parseLong(retryAfter.get().trim());
-                if (seconds >= 0) return Math.min(5_000L, seconds * 1_000L);
+                if (seconds >= 0) return seconds >= 5 ? 5_000L : seconds * 1_000L;
             } catch (NumberFormatException ignored) {
                 // HTTP-date values are uncommon here; use bounded exponential backoff instead.
             }

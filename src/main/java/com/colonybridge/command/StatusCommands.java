@@ -55,6 +55,7 @@ final class StatusCommands {
                 + " retention=" + status.lastTimings().retentionMs()
                 + " sanitize=" + status.lastTimings().sanitizationMs()
                 + " remote=" + status.lastTimings().remotePublishMs()), false);
+        source.sendSuccess(() -> Component.literal("Collection timings: " + exporter.collectionTimingSummary()), false);
         source.sendSuccess(() -> Component.literal("Export directory: " + nullablePath(status.outputRoot())), false);
         source.sendSuccess(() -> Component.literal("Adapter: " + status.adapterName()), false);
         source.sendSuccess(() -> Component.literal("Last warnings/errors: " + status.lastWarningCount()

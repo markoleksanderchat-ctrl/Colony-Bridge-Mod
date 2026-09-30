@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class VanillaItemClassifier {
+    private Object recipeSource;
     private final Map<String, Double> recipeComplexities = new HashMap<>();
 
     public ClassifiedItem classify(Item item, int quantity) {
@@ -19,6 +20,8 @@ public final class VanillaItemClassifier {
     }
 
     public ClassifiedItem classify(MinecraftServer server, Item item, int quantity) {
+        Object currentRecipes = server.getRecipeManager().getRecipes();
+        if (recipeSource != currentRecipes) { recipeComplexities.clear(); recipeSource = currentRecipes; }
         String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
         double recipeComplexity = recipeComplexities.computeIfAbsent(itemId, ignored ->
                 server.getRecipeManager().getRecipes().stream()

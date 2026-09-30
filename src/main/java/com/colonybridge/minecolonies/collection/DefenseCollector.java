@@ -15,6 +15,8 @@ import java.util.*;
 
 public final class DefenseCollector {
     private static final int MAX_TYPES_PER_BUILDING = 256;
+    private Map<String, String> cachedCategories;
+    public void clear() { cachedCategories = null; }
 
     public Result collect(ColonyCollectionContext context,
                           ResearchStatisticsCollector.StatisticsCollection statistics) {
@@ -93,6 +95,7 @@ public final class DefenseCollector {
     }
 
     private Map<String, String> entityCategories() {
+        if (cachedCategories != null) return cachedCategories;
         Set<EntityType<?>> raiders = Collections.newSetFromMap(new IdentityHashMap<>());
         raiders.addAll(ModEntities.getRaiders());
         Map<String, String> categories = new HashMap<>();
@@ -103,7 +106,8 @@ public final class DefenseCollector {
                     : DefenseStatisticsCalculator.UNCLASSIFIED;
             categories.merge(type.getDescriptionId(), category, this::moreSpecific);
         }
-        return categories;
+        cachedCategories = Map.copyOf(categories);
+        return cachedCategories;
     }
 
     private boolean knownNonHostile(MobCategory category) {

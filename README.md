@@ -21,12 +21,12 @@ It does not parse MineColonies NBT as its main data source or write to MineColon
 - MineColonies target: `1.1.1319-1.21.1`
 - Designed to tolerate newer 1.21.1 MineColonies builds when the inspected API remains compatible.
 
-The project was built against the installed Create Adventures CurseForge instance and its MineColonies JAR.
+Development dependencies are pinned by filename and SHA-256 in `dev-dependencies.json`. Supply those JARs in `dev-mods/`, or set `COLONYBRIDGE_DEV_MODS_DIR` / `-Pcolonybridge.devModsDir=<directory>`. The build never selects a JAR by modification time or reads a personal game instance by default.
 
 ## Installation
 
 1. Build the project with `gradlew build`.
-2. Copy `build/libs/colonybridge-0.28.2.jar` into your Minecraft instance `mods` folder.
+2. Copy the JAR matching `mod_version` in `gradle.properties` from `build/libs/` into your Minecraft instance `mods` folder.
 3. Launch Minecraft with NeoForge and MineColonies installed.
 4. Start or load a world containing MineColonies.
 5. Check `<instance>/colonybridge/bridge-info.json` and `<instance>/colonybridge/latest/`.
@@ -53,6 +53,8 @@ Commands never alter colony state.
 ## Royal Exchange
 
 Craft the Royal Exchange with a lectern in the center, an emerald above it, and copper ingots in every other slot. Its Buy and Sell tabs provide delayed live quotes for vanilla goods. The Contracts tab posts rotating premium Crown orders. Prices use the `royal_exchange_v1` valuation formula, broad registry-derived categories, deterministic trends, trade pressure, and decaying lore events. Only requested and contracted goods are simulated.
+
+Base values are game-balance estimates from item traits, recipe complexity, and a small set of fixed anchors; they are not measured player-market prices. Local trends update in 30-minute periods, active events modify them, and fresh online issuer movements can apply a further bounded multiplier. Long idle gaps catch up in one bounded pass. Bulk buy discounts cannot reduce the per-item price below the configured sell ratio, and completed contract IDs are pruned as contract periods rotate.
 
 Trades are executed on the server. It verifies the item, quantity, player, timing, completion state, payment, daily sale allowance, game mode, and exact default item components. Damaged, enchanted, renamed, or otherwise modified goods cannot be sold or submitted to contracts. Modded item namespaces are rejected, and inventory-changing trades require Survival or Adventure mode.
 
@@ -115,7 +117,7 @@ contractDurationMinutes=360
 contractRewardPremium=1.25
 ```
 
-Royal Exchange state is stored atomically in the world root at `colonybridge/market.json`. It contains the saved seed, requested-item records, bounded price history, events, quotes, contracts, completions, daily sale totals, and effective configuration. Version 1 state migrates automatically. Corrupt data is preserved under a timestamped filename before a fresh market is created.
+Royal Exchange state is stored atomically in the world root at `colonybridge/market.json`. It contains the saved seed, requested-item records, bounded price history, events, contracts, completions, daily sale totals, and effective configuration. Quotes are session-local and are not restored after a restart. Version 1 state migrates automatically. Corrupt data is preserved under a timestamped filename before a fresh market is created.
 
 `periodicExportSeconds` defaults to 120 seconds and is clamped to a minimum of 30 seconds. Any value at or above that minimum is preserved, including 2-, 5-, and 10-minute intervals. Automatic interval exports pause while no players are connected; the last-player-disconnect export preserves the final state. Snapshot retention never follows symlinks and only deletes JSON files inside this bridge's own per-colony snapshot directories.
 
@@ -222,3 +224,14 @@ For manual verification, compare world and MineColonies save timestamps before a
 - If a field fails for one citizen/building/request, the snapshot includes a scoped error and continues.
 - If `/cb status` reports remote sync as misconfigured, verify that the endpoint is HTTPS and that both endpoint and token are present.
 - For troubleshooting, provide `bridge-info.json`, the latest snapshot JSON, and the normal NeoForge log around the export. Do not share a whole world save unless you intend to.
+
+## Audit fixes (unreleased)
+
+- Diamond currency, diamond blocks and diamond ores cannot be quoted or traded as goods. Diamond equipment remains available.
+- Trades require enough inventory space for the entire reward. A full inventory cancels and rolls back the trade; rewards are never dropped after persistence.
+- Quotes are transient: one current offer per player, at most 1,024 total, replaced on a new request and discarded on restart. Completed trades remain durable.
+- The Exchange screen displays synchronized failure reasons. Exact transaction results also appear in chat. Client and server must use the same updated mod build (the menu adds a result-code slot).
+- World changes reset collection caches and export diagnostics. Failed inventory/menu reads remain explicitly degraded instead of appearing complete and empty.
+- Citizen position opt-out includes bed, home and status locations. Remote uploads strip territory coordinates, alias livestock hut references, and redact diagnostic location details.
+- Anomaly announcements are bounded, expire, and do not repeat within their retained lifetime. Closed market clients reject late completions.
+- Snapshot schema 2, layout 1 and one-way online influence remain unchanged. Gameplay verification of world switching, full inventories and multiplayer presentation is still required before release.

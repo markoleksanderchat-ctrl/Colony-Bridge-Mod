@@ -9,6 +9,8 @@ import java.util.Optional;
 final class LivestockObservationCache {
     private final Map<Integer, LivestockData> lastComplete = new HashMap<>();
 
+    void clear() { lastComplete.clear(); }
+
     Optional<LivestockData> get(int colonyId) {
         return Optional.ofNullable(lastComplete.get(colonyId));
     }

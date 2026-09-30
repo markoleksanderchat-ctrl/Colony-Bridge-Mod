@@ -31,8 +31,9 @@ public final class Phase4PerformanceProbe {
         report.addProperty("measuredAt", Instant.now().toString());
         report.addProperty("phase", 12);
         report.addProperty("iterations", ITERATIONS);
-        report.addProperty("collectionImplementationChanged", false);
-        report.addProperty("collectionTraversalRegressionPercent", 0);
+        report.addProperty("collectionImplementationChanged", true);
+        // Fixture serialization cannot measure traversal inside a running colony.
+        report.add("collectionTraversalRegressionPercent", com.google.gson.JsonNull.INSTANCE);
         report.addProperty("runtimeCollectionTimingRequired", true);
         report.addProperty("runtimeCollectionInstrumentation", "per-collector counts/timings plus rolling p50/p95/max");
         report.addProperty("optimizationDecision", "retain measured single-serialization and fingerprint-cache paths");

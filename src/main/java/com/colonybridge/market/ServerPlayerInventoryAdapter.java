@@ -1,7 +1,5 @@
 package com.colonybridge.market;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -39,7 +37,7 @@ public final class ServerPlayerInventoryAdapter implements PlayerInventoryPort {
 
     @Override
     public int countPlainItems(String itemId) {
-        Item item = resolve(itemId);
+        Item item = VanillaItems.resolve(itemId);
         if (item == Items.AIR) return 0;
         ItemStack sample = new ItemStack(item);
         int count = 0;
@@ -52,26 +50,36 @@ public final class ServerPlayerInventoryAdapter implements PlayerInventoryPort {
 
     @Override
     public PendingInventoryMutation prepare(InventoryMutation mutation) {
-        Item removed = resolve(mutation.removeItemId());
-        Item granted = resolve(mutation.grantItemId());
+        Item removed = VanillaItems.resolve(mutation.removeItemId());
+        Item granted = VanillaItems.resolve(mutation.grantItemId());
         if (removed == Items.AIR || granted == Items.AIR) {
             throw new IllegalArgumentException("Inventory mutation contains an unavailable item.");
         }
-        return new Pending(removed, mutation.removeCount(), granted, mutation.grantCount());
+        return new Pending(List.of(new Removal(removed, mutation.removeCount())), granted, mutation.grantCount());
     }
 
+    @Override
+    public PendingInventoryMutation prepareBasket(BasketInventoryMutation mutation) {
+        List<Removal> removals = new ArrayList<>();
+        for (BasketLine line : mutation.lines()) {
+            Item item = VanillaItems.resolve(line.itemId());
+            if (item == Items.AIR) throw new IllegalArgumentException("Basket contains an unavailable item.");
+            removals.add(new Removal(item, line.quantity()));
+        }
+        return new Pending(List.copyOf(removals), Items.DIAMOND, mutation.diamonds());
+    }
+
+    private record Removal(Item item, int count) { }
+
     private final class Pending implements PendingInventoryMutation {
-        private final Item removed;
-        private final int removeCount;
+        private final List<Removal> removals;
         private final Item granted;
         private final int grantCount;
         private final List<ItemStack> before = new ArrayList<>();
-        private final List<ItemStack> overflow = new ArrayList<>();
         private boolean applied;
 
-        private Pending(Item removed, int removeCount, Item granted, int grantCount) {
-            this.removed = removed;
-            this.removeCount = removeCount;
+        private Pending(List<Removal> removals, Item granted, int grantCount) {
+            this.removals = removals;
             this.granted = granted;
             this.grantCount = grantCount;
         }
@@ -82,23 +90,21 @@ public final class ServerPlayerInventoryAdapter implements PlayerInventoryPort {
             for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
                 before.add(player.getInventory().getItem(slot).copy());
             }
-            removePlain(removed, removeCount);
+            applied = true;
+            for (Removal removal : removals) removePlain(removal.item(), removal.count());
             int remaining = grantCount;
             while (remaining > 0) {
                 ItemStack stack = new ItemStack(granted, Math.min(remaining, granted.getDefaultMaxStackSize()));
                 remaining -= stack.getCount();
-                if (!player.getInventory().add(stack)) overflow.add(stack.copy());
+                if (!player.getInventory().add(stack) || !stack.isEmpty()) throw new InventoryCapacityException();
             }
             player.getInventory().setChanged();
-            applied = true;
         }
 
         @Override
         public void commit() {
             if (!applied) throw new IllegalStateException("Inventory mutation was not applied.");
-            for (ItemStack stack : overflow) player.drop(stack, false);
             before.clear();
-            overflow.clear();
         }
 
         @Override
@@ -109,7 +115,6 @@ public final class ServerPlayerInventoryAdapter implements PlayerInventoryPort {
             }
             player.getInventory().setChanged();
             before.clear();
-            overflow.clear();
             applied = false;
         }
 
@@ -129,9 +134,4 @@ public final class ServerPlayerInventoryAdapter implements PlayerInventoryPort {
         }
     }
 
-    private static Item resolve(String itemId) {
-        ResourceLocation key = ResourceLocation.tryParse(itemId);
-        if (key == null || !"minecraft".equals(key.getNamespace())) return Items.AIR;
-        return BuiltInRegistries.ITEM.getOptional(key).orElse(Items.AIR);
-    }
 }

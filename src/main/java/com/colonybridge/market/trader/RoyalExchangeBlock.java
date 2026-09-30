@@ -24,7 +24,7 @@ public final class RoyalExchangeBlock extends Block {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             serverPlayer.openMenu(new SimpleMenuProvider(
                     (containerId, inventory, ignored) -> new RoyalExchangeMenu(containerId, inventory,
-                            MarketManager.get(serverPlayer.getServer()), ContainerLevelAccess.create(level, pos)),
+                            MarketManager.get(serverPlayer.getServer()), ContainerLevelAccess.create(level, pos), pos),
                     Component.translatable("container.colonybridge.royal_exchange")));
         }
         return InteractionResult.SUCCESS;

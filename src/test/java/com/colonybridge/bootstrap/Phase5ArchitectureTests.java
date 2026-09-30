@@ -72,7 +72,7 @@ public final class Phase5ArchitectureTests {
                 + Files.readString(Path.of("src/main/java/com/colonybridge/command/MarketCommands.java"));
         for (String wording : List.of("Colony Bridge status", "Colony Bridge export queued.",
                 "Colony Bridge exports are disabled in the server config.", "Royal Exchange operator controls are disabled.",
-                "Only vanilla minecraft: items may be quoted.", "No latest snapshot files have been written yet.")) {
+                "Only vanilla goods other than diamond currency, blocks and ores may be quoted.", "No latest snapshot files have been written yet.")) {
             require(all.contains(wording), "command wording drifted: " + wording);
         }
     }

@@ -19,16 +19,17 @@ public final class MarketPersistence {
     public static MarketState load(Path path) throws IOException {
         if (!Files.isRegularFile(path)) return null;
         try {
+            if (Files.size(path) > 16_000_000) throw new IOException("Market state exceeds the supported size.");
             JsonObject json = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
             MarketState state = JsonSupport.gson(false).fromJson(json, MarketState.class);
             if (state == null) throw new IOException("Empty market data");
             if (state.version() == 1) {
-                return new MarketState(MarketState.CURRENT_VERSION, state.seed(), state.records(), state.activeEvents(),
+                state = new MarketState(MarketState.CURRENT_VERSION, state.seed(), state.records(), state.activeEvents(),
                         java.util.Map.of(), state.completedQuoteIds(), MarketConfig.defaults(), java.util.Map.of(),
                         java.util.Set.of(), java.util.Map.of());
             }
             if (state.version() != MarketState.CURRENT_VERSION) throw new IOException("Unsupported market data version");
-            return state;
+            return MarketStateValidation.validate(state);
         } catch (RuntimeException | IOException malformed) {
             Path preserved = path.resolveSibling("market-corrupt-" + Instant.now().toEpochMilli() + ".json");
             Files.move(path, preserved, StandardCopyOption.REPLACE_EXISTING);

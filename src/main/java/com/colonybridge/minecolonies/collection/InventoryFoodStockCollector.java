@@ -19,11 +19,13 @@ import net.neoforged.neoforge.items.IItemHandler;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * Owns the bounded inventory cache and derives the stock-ledger and food-supply views.
@@ -40,25 +42,36 @@ public final class InventoryFoodStockCollector {
 
     private final Map<String, InventoryCacheEntry> cache = new HashMap<>();
 
-    public Result collect(ColonyCollectionContext context, int citizenCount) {
-        context.requireServerThread();
-        return collect(context.colony(), context.buildings(), context.trigger(), context.currentDay(), citizenCount,
-                context.warnings());
+    private final Map<String, Long> timings = new LinkedHashMap<>();
+
+    public void clear() {
+        cache.clear();
+        timings.clear();
     }
 
-    private Result collect(
-            IColony colony,
-            List<ICommonBuilding> buildings,
-            ExportTrigger trigger,
-            Integer currentDay,
-            int citizenCount,
-            List<BridgeMessage> warnings
-    ) {
-        StockCollection stock = collectStock(colony, buildings, trigger, currentDay, warnings);
+    public Map<String, Long> timings() {
+        return Map.copyOf(timings);
+    }
+
+    private <T> T timed(String name, Supplier<T> action) {
+        long start = System.nanoTime();
+        try {
+            return action.get();
+        } finally {
+            timings.merge(name, Math.max(0, System.nanoTime() - start) / 1000, Long::sum);
+        }
+    }
+
+    public Result collect(ColonyCollectionContext context, int citizenCount) {
+        context.requireServerThread();
+        timings.clear();
+        StockCollection stock = collectStock(context.colony(), context.buildings(), context.trigger(),
+                context.currentDay(), context.warnings());
         InventoryCacheEntry inventory = stock.inventory();
         return new Result(
-                toStockLedger(inventory, currentDay),
-                collectFoodSupply(colony, buildings, inventory, currentDay, citizenCount, warnings),
+                toStockLedger(inventory, context.currentDay()),
+                timed("inventoryFoodAnalysis", () -> collectFoodSupply(context.colony(), context.buildings(),
+                        inventory, context.currentDay(), citizenCount, context.warnings())),
                 stock.cacheHit()
         );
     }
@@ -73,7 +86,7 @@ public final class InventoryFoodStockCollector {
         String cacheKey = dimension(colony) + ":" + colony.getID();
         InventoryCacheEntry cached = cache.get(cacheKey);
         boolean startup = trigger == ExportTrigger.STARTUP;
-        if (cached != null && !StockRefreshPolicy.shouldRefresh(
+        if (cached != null && !cached.truncated() && !StockRefreshPolicy.shouldRefresh(
                 currentDay,
                 cached.refreshedColonyDay(),
                 REFRESH_INTERVAL_DAYS,
@@ -90,6 +103,7 @@ public final class InventoryFoodStockCollector {
         int scannedBuildings = 0;
         int scannedSlots = 0;
         boolean truncated = false;
+        boolean unloaded = false;
 
         try {
             outer:
@@ -97,28 +111,41 @@ public final class InventoryFoodStockCollector {
                 if (!(common instanceof IBuilding building)) {
                     continue;
                 }
+                // getHandlers() calls Level.getBlockEntity(), which can synchronously load a chunk.
+                // Export only already loaded inventories; retry incomplete scans on the next export.
+                if (colony.getWorld() == null || !colony.getWorld().getChunkSource().hasChunk(building.getID().getX() >> 4, building.getID().getZ() >> 4)) {
+                    unloaded = true;
+                    truncated = true;
+                    continue;
+                }
                 scannedBuildings++;
                 String buildingType = buildingType(common);
-                List<IItemHandler> handlers = safe(building::getHandlers, List.of());
+                List<IItemHandler> handlers = timed("inventoryHandlerLookup", () -> java.util.Objects.requireNonNull(building.getHandlers(), "Building handlers unavailable"));
                 for (IItemHandler handler : handlers) {
-                    if (handler == null || !seenHandlers.add(handler)) {
+                    if (handler == null || seenHandlers.contains(handler)) {
                         continue;
                     }
-                    if (seenHandlers.size() > MAX_HANDLERS) {
+                    if (seenHandlers.size() >= MAX_HANDLERS) {
                         truncated = true;
                         break outer;
                     }
 
+                    seenHandlers.add(handler);
                     int slots = Math.max(0, handler.getSlots());
                     handlersByBuildingType.merge(buildingType, 1, Integer::sum);
-                    slotsByBuildingType.merge(buildingType, slots, Integer::sum);
-                    for (int slot = 0; slot < slots; slot++) {
-                        if (scannedSlots >= MAX_SLOTS) {
-                            truncated = true;
-                            break outer;
+                    long slotStarted = System.nanoTime();
+                    try {
+                        for (int slot = 0; slot < slots; slot++) {
+                            if (scannedSlots >= MAX_SLOTS) {
+                                truncated = true;
+                                break outer;
+                            }
+                            scannedSlots++;
+                            slotsByBuildingType.merge(buildingType, 1, Integer::sum);
+                            addStack(counts, handler.getStackInSlot(slot));
                         }
-                        scannedSlots++;
-                        addStack(counts, handler.getStackInSlot(slot));
+                    } finally {
+                        timings.merge("inventorySlotTraversal", Math.max(0, System.nanoTime() - slotStarted) / 1000, Long::sum);
                     }
                 }
             }
@@ -136,12 +163,21 @@ public final class InventoryFoodStockCollector {
             truncated = true;
         }
 
+        if (unloaded) {
+            warnings.add(new BridgeMessage("stockLedger", String.valueOf(colony.getID()),
+                    "STOCK_CHUNKS_UNLOADED", "Some building inventories are not loaded; the next export will retry without loading chunks."));
+            if (cached != null && !cached.truncated()) {
+                warnings.add(new BridgeMessage("stockLedger", String.valueOf(colony.getID()),
+                        "USING_CACHED_STOCK", "The previous complete stock count was retained while inventories are unavailable."));
+                return new StockCollection(cached, true);
+            }
+        }
         if (truncated) {
             warnings.add(new BridgeMessage(
                     "stockLedger",
                     String.valueOf(colony.getID()),
                     "STOCK_SCAN_TRUNCATED",
-                    "The two-day stock scan stopped at its bounded handler or slot limit."
+                    "The stock scan is incomplete because an inventory was unavailable or a scan limit was reached."
             ));
         }
 
@@ -202,16 +238,14 @@ public final class InventoryFoodStockCollector {
                 if (!(common instanceof IBuilding building)) {
                     continue;
                 }
-                List<RestaurantMenuModule> menus = safe(
-                        () -> building.getModules(RestaurantMenuModule.class),
-                        List.of()
-                );
+                List<RestaurantMenuModule> menus = timed("inventoryMenuLookup", () -> java.util.Objects.requireNonNull(
+                        building.getModules(RestaurantMenuModule.class), "Restaurant menus unavailable"));
                 if (menus.isEmpty()) {
                     continue;
                 }
                 diningHallsScanned++;
                 for (RestaurantMenuModule menu : menus) {
-                    Set<ItemStorage> menuEntries = safe(menu::getMenu, Set.of());
+                    Set<ItemStorage> menuEntries = timed("inventoryMenuRead", () -> java.util.Objects.requireNonNull(menu.getMenu(), "Menu unavailable"));
                     for (ItemStorage entry : menuEntries) {
                         if (entry == null || entry.isEmpty()) {
                             continue;
@@ -230,6 +264,9 @@ public final class InventoryFoodStockCollector {
             }
         } catch (Exception failure) {
             warnings.add(message(colony, "foodSupply", "FOOD_MENU_READ_FAILED", failure));
+            return new FoodSupplyData(null, 0, Map.of(), null, null, 0, null, null, null,
+                    "learning", "low", diningHallsScanned, approvedMenuItems.size(), List.copyOf(approvedMenuItems),
+                    inventory.scannedBuildings(), inventory.scannedSlots(), true);
         }
 
         Map<String, Long> foodCounts = new HashMap<>();
@@ -242,9 +279,9 @@ public final class InventoryFoodStockCollector {
 
         long total = foodCounts.values().stream().mapToLong(Long::longValue).sum();
         int sampleDays = currentDay == null ? 0 : Math.min(7, Math.max(0, currentDay));
-        int mealsToday = currentDay == null ? 0 : safe(() -> colony.getStatisticsManager()
+        int mealsToday = currentDay == null ? 0 : CollectionSupport.safe(() -> colony.getStatisticsManager()
                 .getStatsInPeriod("food_served", currentDay, currentDay), 0);
-        int sampleMeals = currentDay == null || sampleDays == 0 ? 0 : safe(() -> colony.getStatisticsManager()
+        int sampleMeals = currentDay == null || sampleDays == 0 ? 0 : CollectionSupport.safe(() -> colony.getStatisticsManager()
                 .getStatsInPeriod("food_served", currentDay - sampleDays, currentDay - 1), 0);
 
         return FoodRunwayAnalyzer.analyze(
@@ -300,21 +337,7 @@ public final class InventoryFoodStockCollector {
     }
 
     private static BridgeMessage message(IColony colony, String scope, String code, Exception failure) {
-        String detail = failure.getMessage();
-        return new BridgeMessage(
-                scope,
-                String.valueOf(colony.getID()),
-                code,
-                failure.getClass().getSimpleName() + (detail == null ? "" : ": " + detail)
-        );
-    }
-
-    private static <T> T safe(ThrowingSupplier<T> supplier, T fallback) {
-        try {
-            return supplier.get();
-        } catch (Exception ignored) {
-            return fallback;
-        }
+        return CollectionSupport.error(scope, String.valueOf(colony.getID()), code, failure);
     }
 
     public record Result(StockLedgerData stockLedger, FoodSupplyData foodSupply, boolean cacheHit) {
@@ -335,8 +358,4 @@ public final class InventoryFoodStockCollector {
     ) {
     }
 
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws Exception;
-    }
 }

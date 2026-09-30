@@ -1,4 +1,40 @@
+# Unreleased audit fixes
+
+- Restore current Royal Exchange feed support with a bounded 2 MiB response and truthful cached-feed status/recovery diagnostics.
+- Avoid forcing unloaded hut chunks during inventory export; retry incomplete scans and retain complete cached totals. Add inventory-stage timings.
+
+- Guard JEI screen-opening queries until dimensions exist and snapshot dimensions for resize detection.
+- Use singular diamond wording for one-diamond purchases, sales and contracts.
+
+Trading conservation and rollback, session isolation, privacy, degraded scans, synchronized errors, bounded quotes and notices, persistence validation, shared lookups/defaults, scan indexes, deterministic dependency lock, translation resources and regression coverage.
+
 # Changelog
+
+## 0.29.4
+
+- Remove forced text shadows from dark quantity/navigation controls, disabled buttons, and the contract timer. Keep shadows on light labels over green buttons and header tabs.
+- Add dragging and track clicks to the goods scrollbar, preserving the grab position and clamping at both ends.
+
+## 0.29.3
+
+- Name every insufficient basket item and its required minimum in chat and row tooltips; show the item name in the single-item status message.
+- Replace the ornate Exchange block texture with simpler 32x32 pixel art to match surrounding Minecraft blocks.
+
+## 0.29.2
+
+- Check every sell basket quantity before rejecting the quote, highlighting all insufficient rows together with each row's required minimum.
+- Keep the other quantity warnings visible when a flagged item is corrected or removed.
+
+## 0.29.1
+
+- Show only the selected good's display name, removing the technical item ID beneath it.
+- Highlight the sell basket row that needs a larger quantity in red; hover it to see the server's required minimum. Clear the warning when the basket is edited.
+
+## 0.29.0
+
+- Add a nine-good sell basket to the Royal Exchange. The Sell tab lists eligible goods already in your inventory; choose quantities, review the basket, request one combined quote, and confirm one sale.
+- Keep goods in your inventory until confirmation. Validate every line and the daily payout limit before selling; roll back the whole sale if saving fails.
+- Retain the basket for 30 seconds after closing the block screen, matching the existing search and selection draft behavior.
 
 ## 0.28.2
 

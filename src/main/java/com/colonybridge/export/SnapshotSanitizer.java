@@ -16,7 +16,8 @@ import java.util.Set;
 public final class SnapshotSanitizer {
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             "worldId", "ownerUuid", "uuid", "center", "position", "currentPosition", "lastKnownPosition",
-            "bedPosition", "statusPosition", "homePosition", "location", "bounds"
+            "bedPosition", "statusPosition", "homePosition", "location", "bounds",
+            "minChunkX", "maxChunkX", "minChunkZ", "maxChunkZ"
     );
 
     private SnapshotSanitizer() {
@@ -46,6 +47,17 @@ public final class SnapshotSanitizer {
         for (JsonElement element : buildings) sanitizeBuilding(element.getAsJsonObject(), buildingIds, requestIds);
         for (JsonElement element : requests) sanitizeRequest(element.getAsJsonObject(), buildingIds, requestIds);
         for (JsonElement element : array(root, "construction")) sanitizeConstruction(element.getAsJsonObject(), buildingIds);
+        if (root.has("livestock") && root.get("livestock").isJsonObject()) {
+            for (JsonElement hut : array(root.getAsJsonObject("livestock"), "huts")) {
+                if (hut.isJsonObject()) remap(hut.getAsJsonObject(), "buildingId", buildingIds);
+            }
+        }
+        // Diagnostic identifiers may contain building coordinates or exception locations.
+        for (String field : new String[]{"warnings", "errors"}) {
+            for (JsonElement issue : array(root, field)) {
+                if (issue.isJsonObject()) { issue.getAsJsonObject().add("entityId", JsonNull.INSTANCE); issue.getAsJsonObject().addProperty("message", "Details available in the local snapshot."); }
+            }
+        }
         scrubSensitiveKeys(root);
         return root;
     }
