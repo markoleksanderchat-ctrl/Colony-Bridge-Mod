@@ -9,9 +9,9 @@
 
 - Improve trade rollback, session handling, privacy, incomplete-scan reporting, error messages, quote and notice limits, saved-data checks, shared defaults, scan indexes, pinned dependencies, translations and regression tests.
 
-## 0.29.7-ui-preview
+## 0.29.7
 
-- Publish the current installed build as a downloadable JAR, with installation instructions and a checksum.
+- Publish the current build as a downloadable JAR, with installation instructions and a checksum.
 
 ## 0.29.4
 
